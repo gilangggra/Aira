@@ -108,7 +108,6 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
   let status: FlowStatus = (await FlowBridge.status()) ?? DEFAULT_STATUS;
   const items = new Map<PageId, HTMLElement>();
   const labels = new Map<PageId, HTMLElement>();
-  const groupWraps = new Map<PageId, HTMLElement>();
   const searchRows = new Map<string, HTMLElement>();
   const statusLine = h("div", { class: "hub-status" });
   const scroll = h("div", { class: "hub-scroll" });
@@ -166,7 +165,6 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
     ctx.onLeave = undefined;
     current = def.id;
     activeAnchor = targetAnchor ?? null;
-    groupWraps.get(current)?.classList.remove("collapsed");
     for (const [id, el] of items) el.classList.toggle("on", id === current);
     updateSearchRowHighlights();
     const token = ++rendering;
@@ -231,30 +229,17 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
   side.append(groupsContainer, resultsContainer);
 
   const group = (title: string, pages: PageDef[]) => {
-    const wrap = h("div", { class: "hub-group-wrap" });
-    const titleEl = h("span", { text: title });
-    const heading = h("button", {
-      class: "hub-group",
-      type: "button",
-      "aria-expanded": "true",
-      onclick: () => {
-        const collapsed = wrap.classList.toggle("collapsed");
-        heading.setAttribute("aria-expanded", String(!collapsed));
-      },
-    }, h("span", { class: "hub-group-chevron", text: "▼" }), titleEl);
-    const itemsBox = h("div", { class: "hub-group-items" });
+    const heading = h("div", { class: "hub-group", text: title });
+    groupsContainer.append(heading);
     for (const p of pages) {
       const b = h("button", { class: "hub-item", onclick: () => void show(p.id) });
       const label = h("span", { text: p.title() });
       b.append(icon(p.icon), label);
       items.set(p.id, b);
       labels.set(p.id, label);
-      groupWraps.set(p.id, wrap);
-      itemsBox.append(b);
+      groupsContainer.append(b);
     }
-    wrap.append(heading, itemsBox);
-    groupsContainer.append(wrap);
-    return titleEl;
+    return heading;
   };
   group("Flow", FLOW_PAGES);
   const notchGroup = group(t("Notch"), NOTCH_PAGES);
