@@ -100,9 +100,10 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
-    let (settings, screen_changed, autostart_changed, shortcuts_changed) = {
+    let (settings, screen_changed, position_changed, autostart_changed, shortcuts_changed) = {
         let mut current = shared.settings.lock().unwrap();
         let screen_changed = current.screen != settings.screen;
+        let position_changed = current.island_position != settings.island_position;
         let autostart_changed = current.autostart != settings.autostart;
         let shortcuts_changed = current.shortcuts != settings.shortcuts;
         // Where Mochi sits on the desktop is desktop.rs's to say, not a webview's.
@@ -123,7 +124,7 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
         // Antigravity approvals: only their own switch changes them (agy_approvals.rs).
         settings.agy_approvals_enabled = current.agy_approvals_enabled;
         *current = settings;
-        (current.clone(), screen_changed, autostart_changed, shortcuts_changed)
+        (current.clone(), screen_changed, position_changed, autostart_changed, shortcuts_changed)
     };
     if let Err(err) = settings::save(&settings) {
         log::line(format!("could not save settings: {err}"));
@@ -135,10 +136,10 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
             eprintln!("[coucou] autostart: {err}");
         }
     }
-    if screen_changed {
+    if screen_changed || position_changed {
         let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
         let size = *shared.gate.collapsed_size.lock().unwrap();
-        island::apply_geometry(&app, &settings.screen, collapsed.then_some(size));
+        island::apply_geometry(&app, &settings.screen, &settings.island_position, collapsed.then_some(size));
     }
     integrations::settings_saved(&app, &settings.active_integrations);
     spotify::sync(&app, &settings.active_integrations);
@@ -182,7 +183,10 @@ fn language_changed(app: &AppHandle) {
 /// cursor poll; anything else → full panel and 60 Hz polling.
 #[tauri::command]
 fn set_collapsed(app: AppHandle, shared: State<Shared>, collapsed: bool, width: Option<f64>, height: Option<f64>) {
-    let pref = shared.settings.lock().unwrap().screen.clone();
+    let (pref, position) = {
+        let s = shared.settings.lock().unwrap();
+        (s.screen.clone(), s.island_position.clone())
+    };
     shared.gate.collapsed.store(collapsed, Ordering::Relaxed);
     // An older page sends no size: the wake strip, as before.
     let size = island::clamp_collapsed((width.unwrap_or(island::STRIP_W), height.unwrap_or(island::STRIP_H)));
@@ -192,7 +196,7 @@ fn set_collapsed(app: AppHandle, shared: State<Shared>, collapsed: bool, width: 
     if collapsed {
         shared.gate.set_active(false);
     }
-    island::apply_geometry(&app, &pref, collapsed.then_some(size));
+    island::apply_geometry(&app, &pref, &position, collapsed.then_some(size));
     // The closed island must always take the mouse, and a resize invalidates the flag.
     island::refresh_click_through(&app, &shared.gate);
     shared.gate.set_active(!collapsed);
@@ -220,10 +224,13 @@ fn focus_window(app: AppHandle, focused: bool) {
 
 #[tauri::command]
 fn reposition(app: AppHandle, shared: State<Shared>) {
-    let pref = shared.settings.lock().unwrap().screen.clone();
+    let (pref, position) = {
+        let s = shared.settings.lock().unwrap();
+        (s.screen.clone(), s.island_position.clone())
+    };
     let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
     let size = *shared.gate.collapsed_size.lock().unwrap();
-    island::apply_geometry(&app, &pref, collapsed.then_some(size));
+    island::apply_geometry(&app, &pref, &position, collapsed.then_some(size));
 }
 
 /// The panel is laid out in CSS px against the window's own scale. If the webview
@@ -1119,7 +1126,7 @@ pub fn run() {
                 platform::make_non_activating(&win);
                 #[cfg(windows)]
                 webview_drop::install(&handle);
-                island::apply_geometry(&handle, &loaded.screen, None);
+                island::apply_geometry(&handle, &loaded.screen, &loaded.island_position, None);
                 let _ = win.show();
             }
             gate.collapsed.store(false, Ordering::Relaxed);

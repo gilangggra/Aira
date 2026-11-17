@@ -855,7 +855,7 @@ export class Island {
 
   private targetSize(): { w: number; h: number; r: number } {
     if (State.mode === "hidden" && this.closedShows) {
-      return { w: this.closedW, h: CLOSED_H, r: 10 };
+      return { w: this.closedW, h: CLOSED_H, r: 13 };
     }
     let { w, h } = islandSize(State.mode, State.view, State.chatHistory.length);
     if (State.mode === "expanded" && State.view === "question" && State.pendingApproval?.questions) {
@@ -879,14 +879,23 @@ export class Island {
     this.ensureRunning();
   }
 
+  private getScale(): number {
+    const s = State.settings.islandScale;
+    return s === "compact" ? 0.9 : s === "large" ? 1.1 : 1.0;
+  }
+
   private applyGeometry() {
+    const scale = this.getScale();
     const w = this.width.value;
     const hh = this.height.value;
     const r = this.radius.value;
     this.islandEl.style.width = `${w}px`;
     this.islandEl.style.height = `${hh}px`;
     this.islandEl.style.borderRadius = `0 0 ${r}px ${r}px`;
-    this.islandEl.style.transform = `translateX(-50%)`;
+    this.islandEl.style.transformOrigin = `top center`;
+    this.islandEl.style.transform = `translateX(-50%) scale(${scale})`;
+    const ear = hh > 2 ? Math.max(0, Math.min(12, hh * 0.45, r * 0.85)) : 0;
+    this.islandEl.style.setProperty("--ear", `${ear.toFixed(2)}px`);
     // These follow the island as it resizes, so they belong here rather than in
     // the state-driven DOM sync.
     this.miniGrid.style.left = `${w - 40 - 14.5}px`;
@@ -895,8 +904,7 @@ export class Island {
     this.greetingCanvas.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.uploadCanvas.el.style.left = `${(w - EXPANDED_W) / 2}px`;
 
-    const viewportW = window.innerWidth > 0 ? window.innerWidth : PANEL_W;
-    const rect = { x: (viewportW - w) / 2, y: 0, w, h: hh };
+    const rect = this.islandRect();
     const p = this.pushedRect;
     if (Math.abs(p.x - rect.x) > 0.5 || Math.abs(p.w - rect.w) > 0.5 || Math.abs(p.h - rect.h) > 0.5) {
       this.pushedRect = rect;
@@ -906,8 +914,9 @@ export class Island {
 
   /** Island rect in window coordinates (origin top-left of the 720×320 window). */
   private islandRect(): { x: number; y: number; w: number; h: number } {
-    const w = this.width.value;
-    const hh = this.height.value;
+    const scale = this.getScale();
+    const w = this.width.value * scale;
+    const hh = this.height.value * scale;
     const viewportW = window.innerWidth > 0 ? window.innerWidth : PANEL_W;
     return { x: (viewportW - w) / 2, y: 0, w, h: hh };
   }
@@ -972,10 +981,13 @@ export class Island {
 
   /** Tells Rust the folded window's size: the closed island's, or none (the strip). */
   private sendCollapsedSize(force = false) {
-    const size = this.closedShows ? { w: this.closedW, h: CLOSED_H } : { w: 0, h: 0 };
+    const scale = this.getScale();
+    const size = this.closedShows
+      ? { w: Math.round(this.closedW * scale), h: Math.round(CLOSED_H * scale) }
+      : { w: 0, h: 0 };
     if (!force && size.w === this.collapsedTo.w && size.h === this.collapsedTo.h) return;
     this.collapsedTo = size;
-    if (size.w > 0) void Bridge.setCollapsed(true, size.w, size.h);
+    if (size.w > 0) void Bridge.setCollapsed(true, size.w + 24, size.h);
     else void Bridge.setCollapsed(true);
   }
 
@@ -1186,10 +1198,11 @@ export class Island {
   private isBotHit(x: number, y: number): boolean {
     // Out on the desktop, the island's Mochi is invisible: nothing to hit.
     if (State.mochiOnDesktop) return false;
+    const scale = this.getScale();
     const rect = this.islandRect();
-    const cx = rect.x + this.botCx.value;
-    const cy = rect.y + this.botCy.value;
-    const radius = this.botSize.value / 2;
+    const cx = rect.x + this.botCx.value * scale;
+    const cy = rect.y + this.botCy.value * scale;
+    const radius = (this.botSize.value * scale) / 2;
     return (x - cx) ** 2 + (y - cy) ** 2 <= radius * radius;
   }
 
@@ -1469,6 +1482,7 @@ export class Island {
   // ── DOM sync ────────────────────────────────────────────────────────────────
 
   private syncDom() {
+    this.islandEl.dataset.style = State.settings.islandStyle || "solid";
     const expanded = State.mode === "expanded";
     const greetingActive = expanded && State.view === "greeting";
 
@@ -1557,9 +1571,11 @@ export class Island {
 
   /** Applies settings coming from Rust at boot. */
   applySettings() {
+    this.islandEl.dataset.style = State.settings.islandStyle || "solid";
     // The closed island may have changed: what it shows, or whether it shows.
     this.closedKey = "";
     this.updateClosed();
+    this.applyGeometry();
     if (State.mode === "hidden") {
       this.animateGeometry(true);
       if (this.collapsed) this.sendCollapsedSize();

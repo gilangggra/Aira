@@ -71,13 +71,65 @@ body {
 /* ── Island ─────────────────────────────────────────────────────────────── */
 
 #island {
+  --island-bg: #000;
+  --island-ear: #000;
   position: absolute;
   top: 0;
   left: 50%;
-  background: #000;
+  background: var(--island-bg);
   border-radius: 0 0 14px 14px;
   overflow: visible;
   will-change: width, height, transform;
+  transform-origin: top center;
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+#island[data-style="glass"] {
+  --island-bg: rgba(18, 18, 24, 0.82);
+  --island-ear: rgba(18, 18, 24, 0.82);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: none;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+#island[data-style="translucent"] {
+  --island-bg: rgba(0, 0, 0, 0.72);
+  --island-ear: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+#island::before,
+#island::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: var(--ear, 0px);
+  height: var(--ear, 0px);
+  pointer-events: none;
+}
+
+#island::before {
+  right: 100%;
+  background: radial-gradient(
+    circle at 0 100%,
+    transparent calc(var(--ear, 0px) - 0.5px),
+    var(--island-ear, #000) var(--ear, 0px)
+  );
+}
+
+#island::after {
+  left: 100%;
+  background: radial-gradient(
+    circle at 100% 100%,
+    transparent calc(var(--ear, 0px) - 0.5px),
+    var(--island-ear, #000) var(--ear, 0px)
+  );
 }
 
 #island-clip {

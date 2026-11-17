@@ -93,9 +93,13 @@ struct IslandContainer: View {
         return min(300, base + CGFloat(state.chatHistory.count) * perMsg)
     }
 
-    /// Pixels the content must be pushed down to clear the concave ear transparent area.
-    /// = 0 in expanded mode (no ears), = earRadius in compact/notch mode.
-    private var earOffset: CGFloat { max(0, -islandTopRadius) }
+    /// Outward-flaring concave ears sit outside [0, width], so content stays flush at y = 0.
+    private var earOffset: CGFloat { 0 }
+
+    private func islandTopCorner(for mode: IslandMode) -> CGFloat {
+        if state.islandPlacement.isCorner { return islandCorner(mode) }
+        return mode == .hidden ? -8 : -10
+    }
 
     var body: some View {
         // Canvas active during drag-over (.upload), post-drop animation (.uploading),
@@ -236,8 +240,8 @@ struct IslandContainer: View {
                                     progress: state.uploadProgress,
                                     nw: state.notchWidth, nh: state.notchHeight)
             let cr  = islandCorner(newMode)
-            // In a corner the island floats: its top corners are rounded too.
-            let tr: CGFloat = state.islandPlacement.isCorner ? cr : 0
+            // In a corner the island floats: its top corners are rounded too; at the notch, smooth concave ears.
+            let tr: CGFloat = islandTopCorner(for: newMode)
             withAnimation(anim) {
                 islandWidth      = w
                 islandHeight     = (newMode == .expanded && state.view == .prompt) ? chatPromptHeight : h
@@ -271,7 +275,7 @@ struct IslandContainer: View {
             islandWidth      = w
             islandHeight     = state.view == .prompt ? chatPromptHeight : h
             cornerRadius     = islandCorner(state.mode)
-            islandTopRadius  = state.islandPlacement.isCorner ? cornerRadius : 0
+            islandTopRadius  = islandTopCorner(for: state.mode)
         }
         .onReceive(NotificationCenter.default.publisher(for: .islandResize)) { _ in
             guard state.mode == .expanded, state.view != .prompt else { return }
@@ -295,7 +299,7 @@ struct IslandContainer: View {
             islandHeight = (state.mode == .expanded && state.view == .prompt) ? chatPromptHeight : h
             // The notch ↔ a corner: flat or rounded top, a round tile at rest.
             cornerRadius = islandCorner(state.mode)
-            islandTopRadius = state.islandPlacement.isCorner ? cornerRadius : 0
+            islandTopRadius = islandTopCorner(for: state.mode)
         }
     }
 
@@ -360,17 +364,14 @@ struct IslandShape: Shape {
             p.addArc(center: CGPoint(x: tr, y: tr), radius: tr,
                      startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
         } else {
-            // ── Concave ear cutouts (compact / notch) ─────────────────────────
-            let er = -topRadius   // positive ear radius
-            p.move(to: CGPoint(x: 0, y: 0))
-            // Top-left ear
-            p.addArc(center: CGPoint(x: 0, y: er), radius: er,
-                     startAngle: .degrees(270), endAngle: .degrees(0), clockwise: false)
-            // Top edge
-            p.addLine(to: CGPoint(x: width - er, y: er))
-            // Top-right ear
-            p.addArc(center: CGPoint(x: width, y: er), radius: er,
-                     startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+            // ── Concave outward-flaring ear cutouts (notch / top edge) ────────
+            let er = min(-topRadius, min(height / 2, max(cr, 1)))
+            p.move(to: CGPoint(x: -er, y: 0))
+            // Top edge along the bezel
+            p.addLine(to: CGPoint(x: width + er, y: 0))
+            // Top-right concave ear: curves smoothly down into x = width
+            p.addArc(center: CGPoint(x: width + er, y: er), radius: er,
+                     startAngle: .degrees(270), endAngle: .degrees(180), clockwise: true)
             // Right edge
             p.addLine(to: CGPoint(x: width, y: height - cr))
             // Bottom-right corner
@@ -381,8 +382,11 @@ struct IslandShape: Shape {
             // Bottom-left corner
             p.addArc(center: CGPoint(x: cr, y: height - cr), radius: cr,
                      startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
-            // Left edge back to top-left corner
-            p.addLine(to: CGPoint(x: 0, y: 0))
+            // Left edge up to ear start
+            p.addLine(to: CGPoint(x: 0, y: er))
+            // Top-left concave ear: curves smoothly up-left to (-er, 0)
+            p.addArc(center: CGPoint(x: -er, y: er), radius: er,
+                     startAngle: .degrees(0), endAngle: .degrees(270), clockwise: true)
         }
 
         p.closeSubpath()
