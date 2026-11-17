@@ -503,6 +503,9 @@ mod tests {
   "phoneRelayUrl": "wss://relay.example.workers.dev",
   "showClock": true,
   "closedIsland": "music",
+  "islandPosition": "top",
+  "islandScale": "normal",
+  "islandStyle": "solid",
   "agyApprovalsEnabled": true
 }"##;
 
@@ -1026,6 +1029,9 @@ mod tests {
                 "phoneRelayUrl",
                 "showClock",
                 "closedIsland",
+                "islandPosition",
+                "islandScale",
+                "islandStyle",
                 "agyApprovalsEnabled",
             ]
         );
