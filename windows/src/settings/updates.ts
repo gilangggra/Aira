@@ -63,13 +63,19 @@ export function updateRows(toggle: Toggle, version: string): HTMLElement[] {
   draw();
 
   return [
-    h("div", { class: "row" },
-      h("label", { text: t("Updates") }),
-      sw,
-      h("span", { class: "hint", text: t("Tell me when a new version is out") }),
+    h("div", { class: "setting-item" },
+      h("div", { class: "setting-info" },
+        h("div", { class: "setting-title", text: t("Updates") }),
+        h("div", { class: "setting-desc", text: t("Tell me when a new version is out") }),
+      ),
+      h("div", { class: "setting-control" }, sw),
     ),
-    h("div", { class: "row" }, h("label", {}), install, check, feedback),
-    h("div", { class: "row" }, h("label", {}), footer),
-    h("div", { class: "row" }, h("label", {}), current),
+    h("div", { class: "setting-item" },
+      h("div", { class: "setting-info" },
+        current,
+        footer,
+      ),
+      h("div", { class: "setting-control" }, feedback, install, check),
+    ),
   ];
 }

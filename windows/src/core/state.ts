@@ -109,6 +109,12 @@ export interface Settings {
   showClock: boolean;
   /** What the closed island shows at the top of the screen (see core/closed.ts). */
   closedIsland: string;
+  /** Position of the island on screen: "top" (default, center), "topLeft", "topRight". */
+  islandPosition?: string;
+  /** Scale of the island: "normal" (default), "compact" (90%), "large" (110%). */
+  islandScale?: string;
+  /** Visual style: "solid" (OLED black), "glass" (acrylic blur), "translucent". */
+  islandStyle?: string;
   absenceInterval: number;
   /** Declared pills next to the main one (at most 4), in the order they were added. */
   activeIntegrations: string[];
@@ -182,6 +188,9 @@ export const DEFAULT_SETTINGS: Settings = {
   alertsFromAllPills: false,
   showClock: false,
   closedIsland: "mochi",
+  islandPosition: "top",
+  islandScale: "normal",
+  islandStyle: "solid",
   absenceInterval: 180,
   activeIntegrations: [
     "integration_resend", "integration_n8n", "integration_vercel", "integration_github",
