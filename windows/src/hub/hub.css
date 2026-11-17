@@ -40,10 +40,11 @@ body.hub-window {
   flex-direction: column;
   gap: 3px;
   padding: 18px 12px 12px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .hub-brand {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -58,16 +59,23 @@ body.hub-window {
 
 /* ── Settings search field & results ── */
 .hub-search {
+  flex: 0 0 38px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  height: 32px;
-  padding: 0 10px;
-  margin: 0 4px 10px;
+  gap: 8px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px;
+  margin: 0 4px 12px;
   background: var(--hub-card);
-  border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-sizing: border-box;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.hub-search:hover {
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .hub-search:focus-within {
@@ -75,9 +83,9 @@ body.hub-window {
 }
 
 .hub-search svg.hub-search-icon {
-  width: 13px;
-  height: 13px;
-  flex: 0 0 13px;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
   fill: none;
   stroke: var(--hub-muted);
   stroke-width: 1.8;
@@ -91,7 +99,7 @@ body.hub-window {
   border: none;
   background: transparent;
   color: var(--hub-text);
-  font: 400 13px var(--font);
+  font: 400 13.5px var(--font);
   outline: none;
   padding: 0;
 }
@@ -229,12 +237,54 @@ body.hub-window {
   animation: hub-card-glow 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
 }
 
+.hub-group-wrap + .hub-group-wrap {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 .hub-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: none;
   font: 700 10.5px var(--font);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--hub-muted);
-  padding: 12px 10px 6px;
+  padding: 8px 10px 6px;
+  text-align: start;
+  cursor: pointer;
+  border-radius: 7px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.hub-group:hover {
+  color: var(--hub-secondary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.hub-group-chevron {
+  font-size: 9px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+  display: inline-block;
+}
+
+.hub-group-wrap.collapsed .hub-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.hub-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hub-group-wrap.collapsed .hub-group-items {
+  display: none;
 }
 
 .hub-item {
@@ -283,7 +333,15 @@ body.hub-window {
   min-height: 12px;
 }
 
+.hub-groups,
+.hub-search-results {
+  flex: 0 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .hub-status {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -301,6 +359,7 @@ body.hub-window {
 }
 
 .hub-version {
+  flex: 0 0 auto;
   color: var(--hub-muted);
   font-size: 11px;
   padding: 8px 12px 0;

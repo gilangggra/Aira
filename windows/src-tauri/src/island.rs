@@ -385,6 +385,34 @@ mod zoom_tests {
         assert_eq!(top_inset_from(0, -20), 0);
         assert_eq!(top_inset_from(0, 900), 0);
     }
+
+    #[test]
+    fn island_x_position_aligns_correctly_and_preserves_center() {
+        let monitor_w = 1920;
+        let scale = 1.0;
+        let expanded_pw = 720;
+        let collapsed_pw = 120;
+
+        // "top" / "center":
+        let x_exp = calculate_island_x(0, monitor_w, PANEL_W, expanded_pw, scale, "top");
+        let x_col = calculate_island_x(0, monitor_w, PANEL_W, collapsed_pw, scale, "top");
+        assert_eq!(x_exp, (1920 - 720) / 2);
+        assert_eq!(x_col, (1920 - 120) / 2);
+        // Center of island on screen remains identical:
+        assert_eq!(x_exp + expanded_pw as i32 / 2, x_col + collapsed_pw as i32 / 2);
+
+        // "topLeft":
+        let x_tl_exp = calculate_island_x(0, monitor_w, PANEL_W, expanded_pw, scale, "topLeft");
+        let x_tl_col = calculate_island_x(0, monitor_w, PANEL_W, collapsed_pw, scale, "topLeft");
+        assert_eq!(x_tl_exp, 32); // margin = 32
+        assert_eq!(x_tl_exp + expanded_pw as i32 / 2, x_tl_col + collapsed_pw as i32 / 2);
+
+        // "topRight":
+        let x_tr_exp = calculate_island_x(0, monitor_w, PANEL_W, expanded_pw, scale, "topRight");
+        let x_tr_col = calculate_island_x(0, monitor_w, PANEL_W, collapsed_pw, scale, "topRight");
+        assert_eq!(x_tr_exp, 1920 - 720 - 32);
+        assert_eq!(x_tr_exp + expanded_pw as i32 / 2, x_tr_col + collapsed_pw as i32 / 2);
+    }
 }
 
 
@@ -425,7 +453,32 @@ fn top_inset_from(monitor_y: i32, work_y: i32) -> i32 {
     if (0..200).contains(&inset) { inset } else { 0 }
 }
 
-pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: Option<(f64, f64)>) {
+pub fn calculate_island_x(
+    mp_x: i32,
+    monitor_width: u32,
+    panel_w: f64,
+    pw: u32,
+    scale: f64,
+    position: &str,
+) -> i32 {
+    let center_x = match position {
+        "topLeft" | "left" => {
+            let margin = (32.0 * scale).round() as i32;
+            mp_x + ((panel_w * scale) / 2.0).round() as i32 + margin
+        }
+        "topRight" | "right" => {
+            let margin = (32.0 * scale).round() as i32;
+            mp_x + monitor_width as i32 - ((panel_w * scale) / 2.0).round() as i32 - margin
+        }
+        _ => {
+            // "top" / "center" (default)
+            mp_x + monitor_width as i32 / 2
+        }
+    };
+    center_x - (pw as i32 / 2)
+}
+
+pub fn apply_geometry(app: &AppHandle, pref: &str, position: &str, collapsed: Option<(f64, f64)>) {
     let Some(win) = window(app) else { return };
     let Some(m) = target_monitor(app, pref) else { return };
 
@@ -436,7 +489,7 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: Option<(f64, f64)>
     let (lw, lh) = collapsed.map(clamp_collapsed).unwrap_or((PANEL_W, PANEL_H));
     let pw = (lw * scale).round().max(1.0) as u32;
     let ph = (lh * scale).round().max(1.0) as u32;
-    let x = mp.x + (ms.width as i32 - pw as i32) / 2;
+    let x = calculate_island_x(mp.x, ms.width, PANEL_W, pw, scale, position);
     let y = mp.y + top_inset(&m);
 
     // GTK never sizes a non-resizable window below its natural size (200 px

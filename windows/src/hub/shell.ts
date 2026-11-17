@@ -32,16 +32,16 @@ export const FLOW_PAGES: PageDef[] = [
   { id: "dictionary", icon: "book", title: () => t("Dictionary") },
   { id: "snippets", icon: "bolt", title: () => t("Snippets") },
   { id: "styles", icon: "text", title: () => t("Styles") },
-  { id: "flowsettings", icon: "sliders", title: () => t("Settings") },
+  { id: "flowsettings", icon: "sliders", title: () => t("Audio Settings") },
 ];
 
 export const NOTCH_PAGES: PageDef[] = [
   { id: "general", icon: "gear", title: () => t("General"), subtitle: () => t("Mochi, his sounds and how the island behaves.") },
   { id: "pills", icon: "grid", title: () => t("Active pills"), subtitle: () => t("The pills shown in the island, their order and their colours.") },
   { id: "agents", icon: "terminal", title: () => t("Agents"), subtitle: () => t("Claude Code, Codex and the other agents Mochi follows.") },
-  { id: "chat", icon: "chat", title: () => t("Chat"), subtitle: () => t("The AI of the island's chat, with your own keys.") },
-  { id: "voice", icon: "wave", title: () => "OK Aira" },
+  { id: "chat", icon: "chat", title: () => t("AI Providers"), subtitle: () => t("The AI of the island's chat, with your own keys.") },
   { id: "integrations", icon: "puzzle", title: () => t("Integrations"), subtitle: () => t("Stripe, GitHub, Vercel, n8n, Notion and the rest.") },
+  { id: "voice", icon: "wave", title: () => "OK Aira" },
   { id: "phone", icon: "phone", title: () => t("Android phone"), subtitle: () => t("Your agents and their approvals on your Android phone, over your Wi-Fi.") },
   { id: "shortcuts", icon: "keyboard", title: () => t("Shortcuts"), subtitle: () => t("The keys that open the island and its actions.") },
 ];
@@ -108,6 +108,7 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
   let status: FlowStatus = (await FlowBridge.status()) ?? DEFAULT_STATUS;
   const items = new Map<PageId, HTMLElement>();
   const labels = new Map<PageId, HTMLElement>();
+  const groupWraps = new Map<PageId, HTMLElement>();
   const searchRows = new Map<string, HTMLElement>();
   const statusLine = h("div", { class: "hub-status" });
   const scroll = h("div", { class: "hub-scroll" });
@@ -165,6 +166,7 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
     ctx.onLeave = undefined;
     current = def.id;
     activeAnchor = targetAnchor ?? null;
+    groupWraps.get(current)?.classList.remove("collapsed");
     for (const [id, el] of items) el.classList.toggle("on", id === current);
     updateSearchRowHighlights();
     const token = ++rendering;
@@ -229,17 +231,30 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
   side.append(groupsContainer, resultsContainer);
 
   const group = (title: string, pages: PageDef[]) => {
-    const heading = h("div", { class: "hub-group", text: title });
-    groupsContainer.append(heading);
+    const wrap = h("div", { class: "hub-group-wrap" });
+    const titleEl = h("span", { text: title });
+    const heading = h("button", {
+      class: "hub-group",
+      type: "button",
+      "aria-expanded": "true",
+      onclick: () => {
+        const collapsed = wrap.classList.toggle("collapsed");
+        heading.setAttribute("aria-expanded", String(!collapsed));
+      },
+    }, h("span", { class: "hub-group-chevron", text: "▼" }), titleEl);
+    const itemsBox = h("div", { class: "hub-group-items" });
     for (const p of pages) {
       const b = h("button", { class: "hub-item", onclick: () => void show(p.id) });
       const label = h("span", { text: p.title() });
       b.append(icon(p.icon), label);
       items.set(p.id, b);
       labels.set(p.id, label);
-      groupsContainer.append(b);
+      groupWraps.set(p.id, wrap);
+      itemsBox.append(b);
     }
-    return heading;
+    wrap.append(heading, itemsBox);
+    groupsContainer.append(wrap);
+    return titleEl;
   };
   group("Flow", FLOW_PAGES);
   const notchGroup = group(t("Notch"), NOTCH_PAGES);
