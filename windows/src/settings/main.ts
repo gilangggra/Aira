@@ -78,6 +78,14 @@ function setSwitch(el: HTMLElement, on: boolean) {
   el.setAttribute("aria-pressed", String(on));
 }
 
+/** Runs `fn` while preserving the scroll position of `.hub-scroll` so DOM rebuilds don't jump the viewport. */
+function preserveScroll(anchor: HTMLElement, fn: () => void) {
+  const scroller = anchor.closest(".hub-scroll") as HTMLElement | null;
+  const top = scroller ? scroller.scrollTop : 0;
+  fn();
+  if (scroller) scroller.scrollTop = top;
+}
+
 function segmentedControl<T extends string>(
   options: [T, string][],
   initial: T,
@@ -441,8 +449,9 @@ const SUBSCRIPTION_NAMES: Record<string, string> = {
 function subscriptionsSection(): HTMLElement {
   const list = h("div", { class: "setting-list" });
   const draw = (rows: SubscriptionStatus[]) => {
-    clear(list);
-    for (const row of rows) {
+    preserveScroll(list, () => {
+      clear(list);
+      for (const row of rows) {
       const p = providerDef(row.provider);
       const sw = toggle(row.on, (on) => {
         void Bridge.subscriptionSet(row.provider, on).then((next) => {
@@ -474,6 +483,7 @@ function subscriptionsSection(): HTMLElement {
         : [h("button", { text: t("Install it"), onclick: () => void Bridge.openUrl(row.installUrl) }), sw];
       list.append(h("div", { class: "setting-item" }, info, h("div", { class: "setting-control" }, ...controls)));
     }
+    });
   };
   void Bridge.subscriptionStatus().then((rows) => draw(rows ?? []));
   return h(
@@ -665,16 +675,18 @@ function activePillsSection(connected: Record<string, boolean>): HTMLElement {
   }
 
   function draw() {
-    const used = settings.activeIntegrations.length;
-    slots.textContent = t("{used}/{max} slots in use — the main tool doesn't take one.", { used, max: MAX_ACTIVE });
-    slots.classList.toggle("full", used >= MAX_ACTIVE);
-    main.value = settings.mainPill;
-    clear(groups);
-    for (const cat of PILL_CATEGORIES) {
-      const pills = availablePills().filter((p) => p.category === cat.id);
-      if (pills.length === 0) continue;
-      groups.append(h("div", { class: "pill-group" }, h("h3", { text: t(cat.title) }), ...pills.map(row)));
-    }
+    preserveScroll(groups, () => {
+      const used = settings.activeIntegrations.length;
+      slots.textContent = t("{used}/{max} slots in use — the main tool doesn't take one.", { used, max: MAX_ACTIVE });
+      slots.classList.toggle("full", used >= MAX_ACTIVE);
+      main.value = settings.mainPill;
+      clear(groups);
+      for (const cat of PILL_CATEGORIES) {
+        const pills = availablePills().filter((p) => p.category === cat.id);
+        if (pills.length === 0) continue;
+        groups.append(h("div", { class: "pill-group" }, h("h3", { text: t(cat.title) }), ...pills.map(row)));
+      }
+    });
   }
   declaredViews.push(draw);
   draw();

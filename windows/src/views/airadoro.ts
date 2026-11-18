@@ -227,11 +227,16 @@ export function buildAiradoroCard(): AiradoroCardHost {
       controlsEl.append(createBtn(t("Stop"), false, () => Airadoro.stop()));
     }
 
-    // 4. Banner
+    // 4. Banner (phase transition banner takes priority; otherwise active task title)
     const banner = snap.paused ? null : Airadoro.banner();
-    if (banner) {
-      bannerEl.textContent = banner;
+    const taskLabel = snap.phase !== "idle" ? Airadoro.taskTitle : null;
+    const text = banner ?? taskLabel;
+    if (text) {
+      bannerEl.textContent = text;
       bannerEl.style.display = "";
+      bannerEl.style.whiteSpace = "nowrap";
+      bannerEl.style.overflow = "hidden";
+      bannerEl.style.textOverflow = "ellipsis";
     } else {
       bannerEl.style.display = "none";
     }

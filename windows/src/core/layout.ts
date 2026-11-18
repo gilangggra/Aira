@@ -26,7 +26,9 @@ export type IslandViewName =
   | "wardrobe"
   | "update"
   | "whatsNew"
-  | "launch";
+  | "launch"
+  | "agenda"
+  | "reminder";
 
 export type BotStateName =
   | "idle"
@@ -103,6 +105,10 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   whatsNew: { height: 222, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
   // A new Claude Code session: Mochi on the left, the project and the prompt (Mac: .launch).
   launch: { height: 160, botX: 58, botY: null, botDiameter: 52, agentMode: "none" },
+  // Daily calendar & task planner: Mochi on the left, mini-calendar + daily tasks on the right.
+  agenda: { height: 248, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
+  // Scheduled task reminder pop-up: Mochi on the left, task + Done / Snooze buttons on the right.
+  reminder: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
 };
 
 // The upload views above are only the fallback geometry. Once a file is actually

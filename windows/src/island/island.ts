@@ -23,6 +23,10 @@ import { SeasonCache, parseOutfit } from "../mochi/wardrobe";
 import { UploadCanvas } from "../upload/canvas";
 import { USC, UploadSeq, uploadProgressCurve } from "../upload/sequence";
 import { dominantPct, planColor } from "../core/plan";
+import { dueAgendaReminders, loadAgendaTasks, markReminderNotified, pendingCountForDate } from "../core/agenda";
+import { dayKey } from "../core/calendar";
+import { AIRADORO_ID } from "../core/airadoro";
+import { Airadoro } from "./airadoro";
 import { language, t, tl } from "../i18n/i18n";
 import { claudeCompactPillVisible, closePlanCard, openPlanColor, planCardOpen } from "../views/usage";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
@@ -47,7 +51,7 @@ const BOT_SIDE = 24;
 const HIT_MARGIN = 14;
 
 /** The views with a text field: the island takes the keyboard while one is on. */
-const TYPING_VIEWS: ReadonlySet<IslandViewName> = new Set(["prompt", "launch"]);
+const TYPING_VIEWS: ReadonlySet<IslandViewName> = new Set(["prompt", "launch", "agenda"]);
 
 /** The three views the drop sequence owns; leaving them stops the engine. */
 const UPLOAD_VIEWS: ReadonlySet<IslandViewName> = new Set(["upload", "uploading", "choose"]);
@@ -91,6 +95,8 @@ export class Island {
   private compactPlan!: HTMLElement;
   private compactPlanDot!: HTMLElement;
   private compactPlanLabel!: HTMLElement;
+  private compactAgenda!: HTMLElement;
+  private compactAgendaLabel!: HTMLElement;
   private wakeStrip!: HTMLElement;
 
   private header!: ViewHost;
@@ -310,6 +316,13 @@ export class Island {
         this.engine.triggerEmote("happy");
         this.collapse();
       },
+      emote: (name) => this.emote(name),
+      focusTask: (title) => {
+        if (Airadoro.startForTask(title)) {
+          State.setFocus(AIRADORO_ID);
+          this.setView("overview");
+        }
+      },
       holdOpen: (on) => {
         if (this.holdingOpen === on) return;
         this.holdingOpen = on;
@@ -352,6 +365,24 @@ export class Island {
       this.compactPlanDot,
       this.compactPlanLabel,
     );
+    this.compactAgendaLabel = h("span", { class: "compact-agenda-label" });
+    this.compactAgenda = h(
+      "button",
+      {
+        id: "compact-agenda",
+        title: tl("Calendar"),
+        onmousedown: (e) => {
+          e.stopPropagation();
+        },
+        onclick: (e) => {
+          e.stopPropagation();
+          const me = e as MouseEvent;
+          if (me.button === 0) this.openAgenda();
+        },
+      },
+      h("i", { class: "compact-agenda-dot" }),
+      this.compactAgendaLabel,
+    );
 
     this.header = buildHeader(actions);
     this.views = buildViews(actions, () => this.animateGeometry(false));
@@ -388,6 +419,7 @@ export class Island {
       this.botCanvas,
       this.miniGrid,
       this.compactPlan,
+      this.compactAgenda,
       this.clockEl,
       this.closedEl,
       this.countdown,
@@ -494,6 +526,16 @@ export class Island {
     State.showingPlanDetail = true;
     this.fsm.forceHome();
     this.expand("overview");
+    State.notify();
+  }
+
+  /** Click on compact agenda badge: opens the Calendar & Task Planner view. */
+  openAgenda() {
+    Sound.resume();
+    State.lastActivity = performance.now();
+    this.fsm.userInteracted();
+    this.fsm.forceHome();
+    this.expand("agenda");
     State.notify();
   }
 
@@ -1550,6 +1592,19 @@ export class Island {
       this.compactPlanLabel.textContent = pct != null ? `${Math.round(pct)}%` : "—";
     }
 
+    // Compact agenda pending tasks indicator
+    const pendingToday = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
+    const showAgenda = State.mode === "compact" && pendingToday > 0;
+    this.compactAgenda.style.opacity = showAgenda ? "1" : "0";
+    this.compactAgenda.style.pointerEvents = showAgenda ? "auto" : "none";
+    if (showAgenda) {
+      const others = State.otherTasks.slice(0, 4);
+      let rightOffset = others.length > 0 ? 58 : 20;
+      if (showPlan) rightOffset += 48;
+      this.compactAgenda.style.right = `${rightOffset}px`;
+      this.compactAgendaLabel.textContent = String(pendingToday);
+    }
+
     this.updateClock();
 
     syncMiniBotStates(State.tasks);
@@ -1587,7 +1642,34 @@ export class Island {
     this.fsm.openOnHover = State.settings.openOnHover;
     State.notify();
     // ponytail: one timer for the life of the window; a minute is the clock's finest tick.
-    this.clockTimer ??= window.setInterval(() => this.updateClock(), 10_000);
+    this.clockTimer ??= window.setInterval(() => {
+      this.updateClock();
+      this.checkAgendaReminders();
+    }, 10_000);
+    this.checkAgendaReminders();
+  }
+
+  /** Surfaces a pop-up reminder card when a scheduled agenda task's time arrives. */
+  private checkAgendaReminders() {
+    if (
+      State.paused ||
+      State.pendingApproval != null ||
+      State.view === "greeting" ||
+      State.view === "uploading" ||
+      State.view === "reminder"
+    ) {
+      return;
+    }
+    const tasks = loadAgendaTasks();
+    const due = dueAgendaReminders(tasks, new Date());
+    if (due.length === 0) return;
+    const task = due[0];
+    const slotKey = task.time ? `${task.date} ${task.time}` : `${task.date} snooze`;
+    markReminderNotified(tasks, task.id, slotKey);
+    State.activeReminder = { id: task.id, date: task.date, title: task.title, time: task.time };
+    Sound.play("finish");
+    this.engine.triggerEmote("surprised");
+    this.alert("reminder");
   }
 
   get panelSize() {

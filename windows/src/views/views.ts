@@ -6,7 +6,9 @@ import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
 import { State, type AgentTask } from "../core/state";
-import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
+import { washRGBA, type BotEmoteName, type IslandViewName, type Wash } from "../core/layout";
+import { loadAgendaTasks, pendingCountForDate } from "../core/agenda";
+import { dayKey } from "../core/calendar";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
 import { buildChoose, buildUpload, buildUploading } from "./upload";
@@ -24,6 +26,7 @@ import { buildWardrobe } from "./wardrobe";
 import { buildUpdate } from "./update";
 import { buildWhatsNew } from "./whatsnew";
 import { buildLaunch } from "./launch";
+import { buildAgendaView, buildReminderView } from "./agenda";
 import { buildSpotifyCard, buildSpotifyPill, type SpotifyPillHost } from "./spotify";
 import { SPOTIFY_ID } from "../core/spotify";
 import { buildWhatsAppCard } from "./whatsapp";
@@ -68,6 +71,10 @@ export interface ViewActions {
   holdOpen(on: boolean): void;
   /** A Claude Code session was started from the launch card: Mochi is pleased, the island folds. */
   launched(): void;
+  /** Triggers a Mochi emote animation on the island. */
+  emote?(name: BotEmoteName): void;
+  /** Starts an Airadoro focus timer for the given agenda task title. */
+  focusTask?(title: string): void;
 }
 
 export interface ViewHost {
@@ -131,6 +138,12 @@ export function buildHeader(actions: ViewActions): ViewHost {
     { class: "tab", title: tl("New Claude Code session"), onclick: () => go("launch") },
     svg(ICONS.terminal, 17, { stroke: 1.7 }),
   );
+  const tabAgenda = h(
+    "button",
+    { class: "tab tab-agenda", title: tl("Calendar"), onclick: () => go("agenda") },
+    svg(ICONS.calendar, 16, { stroke: 1.7 }),
+    h("i", { class: "tab-dot" }),
+  );
 
   const gearBtn = h("button", { title: tl("Settings"), onclick: () => go("settings") }, svg(ICONS.gearLine, 18, { stroke: 1.6 }));
   const soundBtn = h("button", { title: tl("Mute"), onclick: () => actions.toggleSound() }, svg(ICONS.speakerLine, 18, { stroke: 1.6 }));
@@ -151,7 +164,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
   const el = h(
     "div",
     { id: "header" },
-    h("div", { class: "tabs" }, tabHome, tabChat, tabDrop, tabLaunch),
+    h("div", { class: "tabs" }, tabHome, tabChat, tabDrop, tabLaunch, tabAgenda),
     h("div", { class: "header-actions" }, planPills, gearBtn, soundBtn, closeBtn),
   );
   const headerActions = el.lastElementChild as HTMLElement;
@@ -164,6 +177,9 @@ export function buildHeader(actions: ViewActions): ViewHost {
       tabChat.classList.toggle("on", v === "prompt");
       tabDrop.classList.toggle("on", v === "upload");
       tabLaunch.classList.toggle("on", v === "launch");
+      tabAgenda.classList.toggle("on", v === "agenda");
+      const todayPending = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
+      tabAgenda.classList.toggle("has-pending", todayPending > 0);
       gearBtn.classList.toggle("on", v === "settings");
       clear(gearBtn);
       gearBtn.append(v === "settings" ? svg(ICONS.gearFill, 18) : svg(ICONS.gearLine, 18, { stroke: 1.6 }));
@@ -899,6 +915,8 @@ export function buildViews(
   map.set("update", buildUpdate());
   map.set("whatsNew", buildWhatsNew());
   map.set("launch", buildLaunch(actions));
+  map.set("agenda", buildAgendaView(actions));
+  map.set("reminder", buildReminderView(actions));
   // Not in the Windows v1: sending a file by email, window attach + web result.
   map.set("mail", buildPlaceholder(tl("Sending by email isn't in this version."), ""));
   map.set("searching", buildPlaceholder(tl("Claude is searching…"), ""));

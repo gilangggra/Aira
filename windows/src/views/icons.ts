@@ -89,4 +89,6 @@ export const ICONS = {
   folder: "M3 6.6a2 2 0 0 1 2-2h4.3l2 2.2H19a2 2 0 0 1 2 2v8.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6.6z",
   // chevron.down (stroked)
   chevronDown: "M5.5 9 12 15.5 18.5 9",
+  // calendar (stroked)
+  calendar: "M4.5 6.5h15a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19V8a1.5 1.5 0 0 1 1.5-1.5zM8 3.5v3M16 3.5v3M3 10.2h18",
 } as const;

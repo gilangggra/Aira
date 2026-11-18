@@ -249,6 +249,7 @@ class AppState {
   promptContext: PromptContext | null = null;
   droppedFile: { name: string; path: string } | null = null;
   noteMessage: string | null = null;
+  activeReminder: { id: string; date: string; title: string; time?: string } | null = null;
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;
