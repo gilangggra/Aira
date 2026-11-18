@@ -16,6 +16,7 @@ import {
 import { Sound } from "../core/sound";
 import { chipLabel, loadSubscriptions, subscribedProviders, subscription } from "../core/subscriptions";
 import { State, type ChatMessage } from "../core/state";
+import { addAgendaTask, loadAgendaTasks, parseAgendaCommand } from "../core/agenda";
 import type { ViewHost } from "./views";
 import { N_, t, tl } from "../i18n/i18n";
 import { HOST_OS } from "../core/pills";
@@ -302,6 +303,26 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     Sound.play("send");
 
     State.chatHistory.push({ id: nextId++, role: "user", content: query });
+
+    const agendaCmd = parseAgendaCommand(query, new Date());
+    if (agendaCmd) {
+      addAgendaTask(loadAgendaTasks(), agendaCmd.date, agendaCmd.title, agendaCmd.time);
+      const when = agendaCmd.time ? `${agendaCmd.date} · ${agendaCmd.time}` : agendaCmd.date;
+      State.chatHistory.push({
+        id: nextId++,
+        role: "assistant",
+        content: `✓ ${t("Added")}: **${agendaCmd.title}** (${when})`,
+      });
+      Sound.play("finish");
+      sending = false;
+      drawModelButton();
+      State.notify();
+      onHeightChange();
+      input.disabled = false;
+      input.focus();
+      return;
+    }
+
     State.stateOverride = "thinking";
     State.notify();
     onHeightChange();
