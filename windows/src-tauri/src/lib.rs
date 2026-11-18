@@ -44,6 +44,7 @@ mod spotify;
 mod tray;
 mod update;
 mod voice;
+mod weather;
 #[cfg(windows)]
 mod webview_drop;
 mod webview_memory;
@@ -1028,6 +1029,9 @@ pub fn run() {
             recap::recap_clear,
             recap::recap_save_png,
             recap::recap_reveal_saved,
+            weather::fetch_weather,
+            weather::search_weather_city,
+            weather::detect_weather_location,
             desktop::desktop_mochi_info,
             desktop::desktop_mochi_pick_up,
             desktop::desktop_mochi_carry,
