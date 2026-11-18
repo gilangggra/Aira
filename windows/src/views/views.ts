@@ -27,6 +27,7 @@ import { buildUpdate } from "./update";
 import { buildWhatsNew } from "./whatsnew";
 import { buildLaunch } from "./launch";
 import { buildAgendaView, buildReminderView } from "./agenda";
+import { buildWeatherView } from "./weather";
 import { buildSpotifyCard, buildSpotifyPill, type SpotifyPillHost } from "./spotify";
 import { SPOTIFY_ID } from "../core/spotify";
 import { buildWhatsAppCard } from "./whatsapp";
@@ -144,6 +145,11 @@ export function buildHeader(actions: ViewActions): ViewHost {
     svg(ICONS.calendar, 16, { stroke: 1.7 }),
     h("i", { class: "tab-dot" }),
   );
+  const tabWeather = h(
+    "button",
+    { class: "tab tab-weather", title: tl("Weather"), onclick: () => go("weather") },
+    svg(ICONS.cloudSun, 17, { stroke: 1.7 }),
+  );
 
   const gearBtn = h("button", { title: tl("Settings"), onclick: () => go("settings") }, svg(ICONS.gearLine, 18, { stroke: 1.6 }));
   const soundBtn = h("button", { title: tl("Mute"), onclick: () => actions.toggleSound() }, svg(ICONS.speakerLine, 18, { stroke: 1.6 }));
@@ -164,7 +170,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
   const el = h(
     "div",
     { id: "header" },
-    h("div", { class: "tabs" }, tabHome, tabChat, tabDrop, tabLaunch, tabAgenda),
+    h("div", { class: "tabs" }, tabHome, tabChat, tabDrop, tabLaunch, tabAgenda, tabWeather),
     h("div", { class: "header-actions" }, planPills, gearBtn, soundBtn, closeBtn),
   );
   const headerActions = el.lastElementChild as HTMLElement;
@@ -178,6 +184,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
       tabDrop.classList.toggle("on", v === "upload");
       tabLaunch.classList.toggle("on", v === "launch");
       tabAgenda.classList.toggle("on", v === "agenda");
+      tabWeather.classList.toggle("on", v === "weather");
       const todayPending = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
       tabAgenda.classList.toggle("has-pending", todayPending > 0);
       gearBtn.classList.toggle("on", v === "settings");
@@ -917,6 +924,7 @@ export function buildViews(
   map.set("launch", buildLaunch(actions));
   map.set("agenda", buildAgendaView(actions));
   map.set("reminder", buildReminderView(actions));
+  map.set("weather", buildWeatherView(actions));
   // Not in the Windows v1: sending a file by email, window attach + web result.
   map.set("mail", buildPlaceholder(tl("Sending by email isn't in this version."), ""));
   map.set("searching", buildPlaceholder(tl("Claude is searching…"), ""));

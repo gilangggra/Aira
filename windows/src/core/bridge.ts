@@ -9,6 +9,7 @@ import type { Settings } from "./state";
 import type { RecapHistory, RecapPrefs } from "../recap/summary";
 import type { SpotifyState } from "./spotify";
 import type { UpdateStatus } from "./update";
+import type { WeatherLocation, WeatherSnapshot } from "./weather";
 import type { WaIslandView, WaSettingsView, WaTestResult } from "./whatsapp";
 
 export const IS_TAURI =
@@ -521,6 +522,13 @@ export const Bridge = {
   updateInstall: () => call<void>("update_install"),
   /** The release's page on github.com. */
   updateOpenPage: () => call<void>("update_open_page"),
+
+  // ── Live Weather & Air Quality (src-tauri/src/weather.rs) ─────────────────
+  fetchWeather: (lat: number, lon: number, city: string) =>
+    callOrThrow<WeatherSnapshot>("fetch_weather", { lat, lon, city }),
+  searchWeatherCity: (query: string) =>
+    callOrThrow<WeatherLocation[]>("search_weather_city", { query }),
+  detectWeatherLocation: () => call<WeatherLocation | null>("detect_weather_location"),
 };
 
 export type SpotifyAction = "playPause" | "next" | "previous" | "seek" | "shuffle" | "repeat" | "volume";
