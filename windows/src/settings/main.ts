@@ -78,6 +78,71 @@ function setSwitch(el: HTMLElement, on: boolean) {
   el.setAttribute("aria-pressed", String(on));
 }
 
+function segmentedControl<T extends string>(
+  options: [T, string][],
+  initial: T,
+  onChange: (v: T) => void,
+): { element: HTMLElement; setValue: (v: T) => void } {
+  const el = h("div", { class: "hub-segmented" });
+  const buttons = new Map<T, HTMLButtonElement>();
+  for (const [id, text] of options) {
+    const b = h("button", {
+      type: "button",
+      class: id === initial ? "on" : "",
+      text,
+      onclick: () => {
+        for (const [otherId, otherBtn] of buttons) {
+          otherBtn.classList.toggle("on", otherId === id);
+        }
+        onChange(id);
+      },
+    }) as HTMLButtonElement;
+    buttons.set(id, b);
+    el.append(b);
+  }
+  return {
+    element: el,
+    setValue: (v: T) => {
+      for (const [id, b] of buttons) {
+        b.classList.toggle("on", id === v);
+      }
+    },
+  };
+}
+
+function secretField(input: HTMLInputElement): HTMLElement {
+  const toggleBtn = h("button", {
+    type: "button",
+    class: "secret-toggle",
+    title: "Toggle",
+    onclick: () => {
+      const isSecret = input.type === "password";
+      input.type = isSecret ? "text" : "password";
+      const path = toggleBtn.querySelector("path");
+      if (path) {
+        path.setAttribute(
+          "d",
+          isSecret
+            ? "M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"
+            : "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+        );
+      }
+    },
+  });
+  const eyeSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  eyeSvg.setAttribute("viewBox", "0 0 24 24");
+  eyeSvg.setAttribute("fill", "none");
+  eyeSvg.setAttribute("stroke", "currentColor");
+  eyeSvg.setAttribute("stroke-width", "2");
+  eyeSvg.setAttribute("stroke-linecap", "round");
+  eyeSvg.setAttribute("stroke-linejoin", "round");
+  const eyePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  eyePath.setAttribute("d", "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z");
+  eyeSvg.append(eyePath);
+  toggleBtn.append(eyeSvg);
+  return h("div", { class: "secret-field" }, input, toggleBtn);
+}
+
 // ── Changes to Claude Code's settings.json ────────────────────────────────────
 
 /** One kind of change to ~/.claude/settings.json, with the words that go with it. */
@@ -497,7 +562,7 @@ function apiSection(hasKey: boolean, relay: boolean): HTMLElement {
     {},
     h("h2", {}, dot, h("span", { text: "Claude" })),
     state,
-    h("div", { class: "row" }, h("label", { text: t("API key") }), field, saveBtn, clearBtn),
+    h("div", { class: "row" }, h("label", { text: t("API key") }), secretField(field), saveBtn, clearBtn),
     model.element,
     feedback,
   );
@@ -996,7 +1061,7 @@ function integrationsSection(present: Record<string, boolean>): HTMLElement {
       rows.append(
         h("div", { class: "row" },
           h("label", { style: "min-width:104px", text: t(field.label) }),
-          input, saveBtn, dotEl,
+          field.secret ? secretField(input) : input, saveBtn, dotEl,
         ),
       );
     }
@@ -1063,12 +1128,17 @@ function settingItem(title: string, desc: string | null, ...controls: HTMLElemen
 }
 
 function generalSections(): HTMLElement[] {
+  const volumePercent = h("span", {
+    style: "font-size:11.5px;color:var(--dim);min-width:38px;text-align:right",
+    text: `${Math.round((settings.soundVolume / 0.2) * 100)}%`,
+  });
   const volume = h("input", {
     type: "range", min: "0", max: "0.2", step: "0.005",
     value: String(settings.soundVolume),
   }) as HTMLInputElement;
   volume.addEventListener("input", () => {
     settings.soundVolume = Number(volume.value);
+    volumePercent.textContent = `${Math.round((settings.soundVolume / 0.2) * 100)}%`;
     void save();
   });
 
@@ -1089,13 +1159,40 @@ function generalSections(): HTMLElement[] {
   const autoClose = h("input", {
     type: "number", min: "5", max: "120", step: "1",
     value: String(Math.round(settings.autoCloseInterval)),
-    style: "width:72px",
+    style: "width:64px;text-align:center",
   }) as HTMLInputElement;
   autoClose.addEventListener("change", () => {
     settings.autoCloseInterval = Math.max(5, Math.min(120, Number(autoClose.value) || 15));
     autoClose.value = String(settings.autoCloseInterval);
     void save();
+    updateAutoCloseChips();
   });
+
+  const autoCloseChips = h("div", { class: "preset-chips" });
+  const chipButtons: { sec: number; el: HTMLElement }[] = [];
+  function updateAutoCloseChips() {
+    const cur = settings.autoCloseInterval;
+    for (const { sec, el } of chipButtons) {
+      el.classList.toggle("on", sec === cur);
+    }
+  }
+
+  for (const sec of [5, 15, 30, 60]) {
+    const chip = h("button", {
+      type: "button",
+      class: "preset-chip",
+      text: `${sec}s`,
+      onclick: () => {
+        settings.autoCloseInterval = sec;
+        autoClose.value = String(sec);
+        void save();
+        updateAutoCloseChips();
+      },
+    });
+    chipButtons.push({ sec, el: chip });
+    autoCloseChips.append(chip);
+  }
+  updateAutoCloseChips();
 
   // The closed island (core/closed.ts): what stays at the top of the screen.
   const closed = h("select", {}) as HTMLSelectElement;
@@ -1140,41 +1237,44 @@ function generalSections(): HTMLElement[] {
     void save();
   });
 
-  const positionSelect = h("select", {}) as HTMLSelectElement;
-  positionSelect.append(
-    h("option", { value: "top", text: t("Top center") }),
-    h("option", { value: "topLeft", text: t("Top left") }),
-    h("option", { value: "topRight", text: t("Top right") }),
+  const positionCtrl = segmentedControl(
+    [
+      ["top", t("Top center")],
+      ["topLeft", t("Top left")],
+      ["topRight", t("Top right")],
+    ],
+    settings.islandPosition || "top",
+    (val) => {
+      settings.islandPosition = val;
+      void save();
+    },
   );
-  positionSelect.value = settings.islandPosition || "top";
-  positionSelect.addEventListener("change", () => {
-    settings.islandPosition = positionSelect.value;
-    void save();
-  });
 
-  const scaleSelect = h("select", {}) as HTMLSelectElement;
-  scaleSelect.append(
-    h("option", { value: "compact", text: t("Compact (90%)") }),
-    h("option", { value: "normal", text: t("Standard (100%)") }),
-    h("option", { value: "large", text: t("Large (110%)") }),
+  const scaleCtrl = segmentedControl(
+    [
+      ["compact", t("Compact (90%)")],
+      ["normal", t("Standard (100%)")],
+      ["large", t("Large (110%)")],
+    ],
+    settings.islandScale || "normal",
+    (val) => {
+      settings.islandScale = val;
+      void save();
+    },
   );
-  scaleSelect.value = settings.islandScale || "normal";
-  scaleSelect.addEventListener("change", () => {
-    settings.islandScale = scaleSelect.value;
-    void save();
-  });
 
-  const styleSelect = h("select", {}) as HTMLSelectElement;
-  styleSelect.append(
-    h("option", { value: "solid", text: t("OLED Black (Solid)") }),
-    h("option", { value: "glass", text: t("Acrylic Glass") }),
-    h("option", { value: "translucent", text: t("Translucent") }),
+  const styleCtrl = segmentedControl(
+    [
+      ["solid", t("OLED Black (Solid)")],
+      ["glass", t("Acrylic Glass")],
+      ["translucent", t("Translucent")],
+    ],
+    settings.islandStyle || "solid",
+    (val) => {
+      settings.islandStyle = val;
+      void save();
+    },
   );
-  styleSelect.value = settings.islandStyle || "solid";
-  styleSelect.addEventListener("change", () => {
-    settings.islandStyle = styleSelect.value;
-    void save();
-  });
 
   const sound = toggle(settings.soundEnabled, (v) => { settings.soundEnabled = v; void save(); });
   const openOnHover = toggle(settings.openOnHover, (v) => { settings.openOnHover = v; void save(); });
@@ -1183,13 +1283,17 @@ function generalSections(): HTMLElement[] {
     setSwitch(sound, settings.soundEnabled);
     setSwitch(openOnHover, settings.openOnHover);
     setSwitch(autostart, settings.autostart);
-    positionSelect.value = settings.islandPosition || "top";
-    scaleSelect.value = settings.islandScale || "normal";
-    styleSelect.value = settings.islandStyle || "solid";
+    positionCtrl.setValue(settings.islandPosition || "top");
+    scaleCtrl.setValue(settings.islandScale || "normal");
+    styleCtrl.setValue(settings.islandStyle || "solid");
     // A field being edited keeps what is in it; it catches up when it is left.
-    if (document.activeElement !== volume) volume.value = String(settings.soundVolume);
+    if (document.activeElement !== volume) {
+      volume.value = String(settings.soundVolume);
+      volumePercent.textContent = `${Math.round((settings.soundVolume / 0.2) * 100)}%`;
+    }
     if (document.activeElement !== autoClose) {
       autoClose.value = String(Math.round(settings.autoCloseInterval));
+      updateAutoCloseChips();
     }
   };
   volume.addEventListener("blur", () => generalSync?.());
@@ -1219,6 +1323,7 @@ function generalSections(): HTMLElement[] {
     settingItem(
       t("Auto-close"),
       t("seconds after you leave the island"),
+      autoCloseChips,
       autoClose,
     ),
   );
@@ -1229,17 +1334,17 @@ function generalSections(): HTMLElement[] {
     settingItem(
       t("Island position"),
       t("Where the island sits at the top of the screen."),
-      positionSelect,
+      positionCtrl.element,
     ),
     settingItem(
       t("Island scale"),
       t("The size of the island."),
-      scaleSelect,
+      scaleCtrl.element,
     ),
     settingItem(
       t("Visual style"),
       t("Background appearance and glass blur effect."),
-      styleSelect,
+      styleCtrl.element,
     ),
     settingItem(
       t("Closed island shows"),
@@ -1255,7 +1360,7 @@ function generalSections(): HTMLElement[] {
 
   const soundCard = card(
     t("Sound"),
-    settingItem(t("Sound"), null, sound, volume),
+    settingItem(t("Sound"), null, sound, volume, volumePercent),
     settingItem(
       t("Open sounds folder"),
       t("Drop a file named like one of Mochi's sounds (finish.wav, approval.mp3, greet.m4a…) in the sounds folder to replace it, then Reload."),
