@@ -12,7 +12,7 @@
   --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
   --ink: #f5f6f8;
   --dim: #9398a1;
-  --dim-2: #6b7079;
+  --dim-2: #8e939c;
   --bg: #0b0c0e;
   --card: #141518;
   --hairline: rgba(255, 255, 255, 0.07);
@@ -204,7 +204,23 @@ select {
   border: 1px solid var(--hairline);
   border-radius: 8px;
   color: var(--ink);
-  padding: 5px 8px;
+  padding: 6px 10px;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238e939c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
+
+select:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 input::placeholder {
@@ -214,7 +230,8 @@ input::placeholder {
 input:focus,
 select:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
 /* The popup is drawn by the OS: give it an explicit pair of colours rather than
@@ -511,4 +528,107 @@ html[dir="rtl"] :is(.diff, .path, .keycap, input[type="password"], input[type="t
 
 .setting-block + .setting-block {
   border-top: 1px solid var(--hairline);
+}
+
+/* ── Segmented Control in Settings ── */
+.hub-segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline);
+  gap: 3px;
+}
+
+.hub-segmented button {
+  border-radius: 6px;
+  padding: 5px 12px;
+  background: transparent;
+  color: var(--dim);
+  font: 500 12px var(--font);
+  border: 0;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.hub-segmented button:hover:not(.on) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+}
+
+.hub-segmented button.on {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Preset Chips for Quick Intervals ── */
+.preset-chips {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.preset-chip {
+  font: 500 11px var(--font);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline);
+  color: var(--dim);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.preset-chip:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+}
+
+.preset-chip.on {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* ── Secret Field with Toggle Visibility ── */
+.secret-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.secret-field input {
+  width: 100%;
+  padding-right: 30px;
+}
+
+.secret-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--dim-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.secret-toggle:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.secret-toggle svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
 }

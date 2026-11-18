@@ -312,6 +312,14 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
     if (searchInput.value.trim()) renderSearchResults();
   });
 
+  window.addEventListener("keydown", (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "k")) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+  });
+
   side.append(h("div", { class: "spacer" }), statusLine, h("div", { class: "hub-version", text: `Aira ${opts.version}` }));
 
   clear(root);
