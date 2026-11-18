@@ -28,7 +28,8 @@ export type IslandViewName =
   | "whatsNew"
   | "launch"
   | "agenda"
-  | "reminder";
+  | "reminder"
+  | "weather";
 
 export type BotStateName =
   | "idle"
@@ -109,6 +110,8 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   agenda: { height: 248, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
   // Scheduled task reminder pop-up: Mochi on the left, task + Done / Snooze buttons on the right.
   reminder: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
+  // Live local weather & air quality: Mochi on the left, atmospheric card + forecast on the right.
+  weather: { height: 272, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
 };
 
 // The upload views above are only the fallback geometry. Once a file is actually

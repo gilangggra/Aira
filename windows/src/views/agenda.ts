@@ -45,19 +45,159 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
     spellcheck: "false",
   }) as HTMLInputElement;
 
-  const timeInput = h("input", {
+  let selectedTime = "";
+  let selectedRepeat: AgendaRepeat = "none";
+  let timeMenuOpen = false;
+
+  const timeLabel = h("span", { text: "--:--" });
+  const timeClearBtn = h("button", {
+    type: "button",
+    class: "agenda-time-clear",
+    text: "×",
+    onclick: (e: Event) => {
+      e.stopPropagation();
+      actions.blip();
+      setTime("");
+    },
+  });
+  const timePillBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "agenda-time-pill",
+      title: tl("Reminder"),
+      onclick: (e: Event) => {
+        e.stopPropagation();
+        actions.blip();
+        setTimeMenuOpen(!timeMenuOpen);
+      },
+    },
+    svg(ICONS.timer, 11, { stroke: 1.9 }),
+    timeLabel,
+  );
+
+  const customTimeInput = h("input", {
     type: "time",
-    class: "agenda-time-input",
+    class: "agenda-time-custom",
     title: tl("Reminder"),
   }) as HTMLInputElement;
+  customTimeInput.addEventListener("change", () => {
+    setTime(customTimeInput.value);
+    setTimeMenuOpen(false);
+  });
+  customTimeInput.addEventListener("focus", () => actions.keyboard(true));
+  customTimeInput.addEventListener("blur", () => actions.keyboard(false));
 
-  const repeatSelect = h(
-    "select",
-    { class: "agenda-repeat-select" },
-    h("option", { value: "none", text: tl("Once") }),
-    h("option", { value: "daily", text: tl("Daily") }),
-    h("option", { value: "weekly", text: tl("Weekly") }),
-  ) as HTMLSelectElement;
+  function offsetTime(addMinutes: number): string {
+    const d = new Date(Date.now() + addMinutes * 60_000);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+
+  const timePopover = h(
+    "div",
+    {
+      class: "agenda-time-pop",
+      onclick: (e: Event) => e.stopPropagation(),
+    },
+    h(
+      "div",
+      { class: "agenda-time-quick" },
+      h("button", {
+        type: "button",
+        class: "agenda-time-chip",
+        text: "+30m",
+        onclick: () => {
+          actions.blip();
+          setTime(offsetTime(30));
+          setTimeMenuOpen(false);
+        },
+      }),
+      h("button", {
+        type: "button",
+        class: "agenda-time-chip",
+        text: "+1h",
+        onclick: () => {
+          actions.blip();
+          setTime(offsetTime(60));
+          setTimeMenuOpen(false);
+        },
+      }),
+      customTimeInput,
+    ),
+    h(
+      "div",
+      { class: "agenda-time-presets" },
+      ...["08:00", "09:00", "12:00", "14:00", "17:00", "20:00"].map((preset) =>
+        h("button", {
+          type: "button",
+          class: "agenda-time-preset",
+          text: preset,
+          onclick: () => {
+            actions.blip();
+            setTime(preset);
+            setTimeMenuOpen(false);
+          },
+        }),
+      ),
+    ),
+  );
+
+  const timeWrap = h(
+    "div",
+    {
+      class: "agenda-time-wrap",
+      onpointerdown: (e: Event) => e.stopPropagation(),
+    },
+    timePillBtn,
+    timeClearBtn,
+    timePopover,
+  );
+
+  function setTime(val: string) {
+    selectedTime = val;
+    customTimeInput.value = val;
+    timeLabel.textContent = val || "--:--";
+    timePillBtn.classList.toggle("on", Boolean(val));
+    timeClearBtn.classList.toggle("show", Boolean(val));
+    for (const btn of timePopover.querySelectorAll<HTMLButtonElement>(".agenda-time-preset")) {
+      btn.classList.toggle("on", btn.textContent === val);
+    }
+  }
+
+  function setTimeMenuOpen(open: boolean) {
+    timeMenuOpen = open;
+    timePopover.classList.toggle("open", open);
+    actions.holdOpen(open || input.value.trim().length > 0);
+  }
+
+  const repeatOptions: Array<{ value: AgendaRepeat; label: ReturnType<typeof tl> }> = [
+    { value: "none", label: tl("Once") },
+    { value: "daily", label: tl("Daily") },
+    { value: "weekly", label: tl("Weekly") },
+  ];
+  const repeatButtons = repeatOptions.map((opt) => {
+    const btn = h("button", {
+      type: "button",
+      class: opt.value === selectedRepeat ? "agenda-seg-btn on" : "agenda-seg-btn",
+      text: opt.label,
+      onclick: () => {
+        actions.blip();
+        setRepeat(opt.value);
+      },
+    });
+    btn.dataset.repeat = opt.value;
+    return btn;
+  });
+  const repeatSeg = h("div", { class: "agenda-repeat-seg" }, ...repeatButtons);
+
+  function setRepeat(val: AgendaRepeat) {
+    selectedRepeat = val;
+    for (const btn of repeatButtons) {
+      btn.classList.toggle("on", btn.dataset.repeat === val);
+    }
+  }
 
   const addBtn = h("button", {
     type: "submit",
@@ -68,8 +208,8 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
   const form = h(
     "form",
     { class: "agenda-form" },
-    h("div", { class: "agenda-form-main" }, input, addBtn),
-    h("div", { class: "agenda-form-opts" }, timeInput, repeatSelect),
+    h("div", { class: "agenda-form-main" }, input),
+    h("div", { class: "agenda-form-opts" }, timeWrap, repeatSeg, addBtn),
   );
   form.addEventListener("submit", (e: Event) => {
     e.preventDefault();
@@ -80,12 +220,13 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
       tasks,
       dayKey(selectedDate),
       text,
-      timeInput.value,
-      repeatSelect.value as AgendaRepeat,
+      selectedTime,
+      selectedRepeat,
     );
     input.value = "";
-    timeInput.value = "";
-    repeatSelect.value = "none";
+    setTime("");
+    setRepeat("none");
+    setTimeMenuOpen(false);
     actions.holdOpen(false);
     renderCalendar();
     renderTasks();
@@ -94,11 +235,14 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
   });
 
   input.addEventListener("input", () => {
-    actions.holdOpen(input.value.trim().length > 0);
+    actions.holdOpen(timeMenuOpen || input.value.trim().length > 0);
   });
-  input.addEventListener("focus", () => actions.keyboard(true));
+  input.addEventListener("focus", () => {
+    setTimeMenuOpen(false);
+    actions.keyboard(true);
+  });
   input.addEventListener("blur", () => {
-    actions.holdOpen(false);
+    actions.holdOpen(timeMenuOpen);
     actions.keyboard(false);
   });
 
@@ -110,6 +254,9 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
 
   const shell = h("div", { class: "agenda-shell" }, calColumn, tasksColumn);
   const el = h("div", { class: "view agenda-view" }, shell);
+  el.addEventListener("pointerdown", () => {
+    if (timeMenuOpen) setTimeMenuOpen(false);
+  });
 
   function renderCalendar() {
     clear(calColumn);
@@ -223,7 +370,14 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
 
     clear(listEl);
     if (dayTasks.length === 0) {
-      listEl.append(h("div", { class: "agenda-empty", text: t("No tasks") }));
+      listEl.append(
+        h(
+          "div",
+          { class: "agenda-empty" },
+          svg(ICONS.calendar, 20, { stroke: 1.5 }),
+          h("span", { text: t("No tasks") }),
+        ),
+      );
       return;
     }
 

@@ -25,6 +25,7 @@ import { USC, UploadSeq, uploadProgressCurve } from "../upload/sequence";
 import { dominantPct, planColor } from "../core/plan";
 import { dueAgendaReminders, loadAgendaTasks, markReminderNotified, pendingCountForDate } from "../core/agenda";
 import { dayKey } from "../core/calendar";
+import { Weather, formatTemp, wmoCondition } from "../core/weather";
 import { AIRADORO_ID } from "../core/airadoro";
 import { Airadoro } from "./airadoro";
 import { language, t, tl } from "../i18n/i18n";
@@ -97,6 +98,8 @@ export class Island {
   private compactPlanLabel!: HTMLElement;
   private compactAgenda!: HTMLElement;
   private compactAgendaLabel!: HTMLElement;
+  private compactWeather!: HTMLElement;
+  private compactWeatherLabel!: HTMLElement;
   private wakeStrip!: HTMLElement;
 
   private header!: ViewHost;
@@ -178,6 +181,11 @@ export class Island {
       this.dirty = true;
       this.ensureRunning();
     });
+    Weather.subscribe(() => {
+      this.dirty = true;
+      this.ensureRunning();
+    });
+    void Weather.ensureLoaded(false);
   }
 
   /** The request has its answer: the card goes and the session carries on. */
@@ -383,6 +391,23 @@ export class Island {
       h("i", { class: "compact-agenda-dot" }),
       this.compactAgendaLabel,
     );
+    this.compactWeatherLabel = h("span", { class: "compact-weather-label" });
+    this.compactWeather = h(
+      "button",
+      {
+        id: "compact-weather",
+        title: tl("Weather"),
+        onmousedown: (e) => {
+          e.stopPropagation();
+        },
+        onclick: (e) => {
+          e.stopPropagation();
+          const me = e as MouseEvent;
+          if (me.button === 0) this.openWeather();
+        },
+      },
+      this.compactWeatherLabel,
+    );
 
     this.header = buildHeader(actions);
     this.views = buildViews(actions, () => this.animateGeometry(false));
@@ -420,6 +445,7 @@ export class Island {
       this.miniGrid,
       this.compactPlan,
       this.compactAgenda,
+      this.compactWeather,
       this.clockEl,
       this.closedEl,
       this.countdown,
@@ -536,6 +562,16 @@ export class Island {
     this.fsm.userInteracted();
     this.fsm.forceHome();
     this.expand("agenda");
+    State.notify();
+  }
+
+  /** Click on compact weather pill: opens the Live Weather view. */
+  openWeather() {
+    Sound.resume();
+    State.lastActivity = performance.now();
+    this.fsm.userInteracted();
+    this.fsm.forceHome();
+    this.expand("weather");
     State.notify();
   }
 
@@ -1603,6 +1639,17 @@ export class Island {
       if (showPlan) rightOffset += 48;
       this.compactAgenda.style.right = `${rightOffset}px`;
       this.compactAgendaLabel.textContent = String(pendingToday);
+    }
+
+    // Compact live weather pill on the left next to Mochi
+    const snap = Weather.snapshot;
+    const showWeather = State.mode === "compact" && snap != null;
+    this.compactWeather.style.opacity = showWeather ? "1" : "0";
+    this.compactWeather.style.pointerEvents = showWeather ? "auto" : "none";
+    if (showWeather && snap) {
+      const cond = wmoCondition(snap.weatherCode, snap.isDay);
+      this.compactWeatherLabel.textContent = `${cond.emoji} ${formatTemp(snap.tempC, Weather.unit)}`;
+      this.compactWeather.title = `${snap.city} · ${t(cond.label)}`;
     }
 
     this.updateClock();
