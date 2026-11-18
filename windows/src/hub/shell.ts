@@ -161,6 +161,8 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
 
   async function show(page: PageId, targetAnchor?: string) {
     const def = ALL.find((p) => p.id === page) ?? FLOW_PAGES[0];
+    const samePage = scroll.childElementCount > 0 && current === def.id && !targetAnchor;
+    const prevScroll = samePage ? scroll.scrollTop : 0;
     ctx.onLeave?.();
     ctx.onLeave = undefined;
     current = def.id;
@@ -191,6 +193,8 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
       } else {
         scroll.scrollTop = 0;
       }
+    } else if (samePage) {
+      scroll.scrollTop = prevScroll;
     } else {
       scroll.scrollTop = 0;
     }
@@ -310,6 +314,14 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
   onLanguageChange(() => {
     searchInput.placeholder = t("Search settings");
     if (searchInput.value.trim()) renderSearchResults();
+  });
+
+  window.addEventListener("keydown", (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "k")) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
   });
 
   side.append(h("div", { class: "spacer" }), statusLine, h("div", { class: "hub-version", text: `Aira ${opts.version}` }));

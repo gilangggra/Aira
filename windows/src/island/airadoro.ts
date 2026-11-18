@@ -10,6 +10,8 @@ import {
 } from "../core/airadoro";
 import { Sound } from "../core/sound";
 import { State, type AgentTask } from "../core/state";
+import { Bridge } from "../core/bridge";
+import { toggleDeclared } from "../core/pills";
 import { t } from "../i18n/i18n";
 import type { Island } from "./island";
 
@@ -19,9 +21,14 @@ class AiradoroManager {
   private noticeUntil: number | null = null;
   private island: Island | null = null;
   private registered = false;
+  private activeTask: string | null = null;
 
   get snapshot(): AiradoroSnapshot {
     return this.snap;
+  }
+
+  get taskTitle(): string | null {
+    return this.activeTask;
   }
 
   register(island: Island) {
@@ -54,6 +61,20 @@ class AiradoroManager {
     State.notify();
   }
 
+  /** Enables Airadoro if needed and starts a focus session for a specific task. */
+  startForTask(title: string): boolean {
+    if (!this.isPillActive()) {
+      const next = toggleDeclared(State.settings, AIRADORO_ID, State.os);
+      if (!next) return false;
+      State.settings.activeIntegrations = next;
+      State.loadIntegrationTasks();
+      void Bridge.saveSettings(State.settings);
+    }
+    this.activeTask = title.trim() || null;
+    this.begin();
+    return true;
+  }
+
   pause() {
     if (!this.isPillActive() || this.snap.phase === "idle" || this.snap.paused) return;
     this.snap = AiradoroEngine.pause(this.snap);
@@ -74,6 +95,7 @@ class AiradoroManager {
   stop() {
     this.snap = AiradoroEngine.stop();
     this.noticeUntil = null;
+    this.activeTask = null;
     this.stopTimer();
     this.paintIdle();
     State.notify();
