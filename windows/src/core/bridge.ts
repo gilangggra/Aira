@@ -529,6 +529,11 @@ export const Bridge = {
   searchWeatherCity: (query: string) =>
     callOrThrow<WeatherLocation[]>("search_weather_city", { query }),
   detectWeatherLocation: () => call<WeatherLocation | null>("detect_weather_location"),
+
+  // ── Clipboard History Manager (src-tauri/src/clipboard.rs) ────────────────
+  clipboardReadText: () => call<string | null>("clipboard_read_text"),
+  clipboardWriteText: (text: string) => call<void>("clipboard_write_text", { text }),
+  clipboardSetPaused: (paused: boolean) => call<void>("clipboard_set_paused", { paused }),
 };
 
 export type SpotifyAction = "playPause" | "next" | "previous" | "seek" | "shuffle" | "repeat" | "volume";

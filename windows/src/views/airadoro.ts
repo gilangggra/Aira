@@ -4,7 +4,14 @@
 import { h, dot, svg, clear } from "./dom";
 import { ICONS } from "./icons";
 import { Airadoro } from "../island/airadoro";
-import { AiradoroEngine, getAiradoroConfig } from "../core/airadoro";
+import {
+  AIRADORO_STORAGE_WORK,
+  AiradoroEngine,
+  DEFAULT_WORK_MINUTES,
+  getAiradoroConfig,
+  loadStoredMinutes,
+  saveStoredMinutes,
+} from "../core/airadoro";
 import { State, type AgentTask, type PillBadge } from "../core/state";
 import { createMiniBot } from "../mochi/minibots";
 import { t } from "../i18n/i18n";
@@ -124,9 +131,12 @@ export function buildAiradoroCard(): AiradoroCardHost {
   bannerEl.style.marginTop = "4px";
   bannerEl.style.display = "none";
 
-  el.append(head, row, bannerEl);
+  const progressFill = h("div", { class: "airadoro-progress-fill" });
+  const progressTrack = h("div", { class: "airadoro-progress-track" }, progressFill);
 
-  function createBtn(text: string, filled: boolean, onClick: () => void): HTMLElement {
+  el.append(head, row, progressTrack, bannerEl);
+
+  function createBtn(text: string, filled: boolean, onClick: () => void, accentBg?: string): HTMLElement {
     const btn = h("button", { class: "btn-subtle", text, onclick: onClick });
     btn.style.font = "600 11px var(--font)";
     btn.style.padding = "4px 10px";
@@ -135,7 +145,7 @@ export function buildAiradoroCard(): AiradoroCardHost {
     btn.style.transition = "all 0.15s ease";
 
     if (filled) {
-      btn.style.background = ACCENT_COLOR;
+      btn.style.background = accentBg ?? ACCENT_COLOR;
       btn.style.color = "#041018";
       btn.style.border = "none";
     } else {
@@ -160,14 +170,22 @@ export function buildAiradoroCard(): AiradoroCardHost {
 
   function paintClock() {
     const snap = Airadoro.snapshot;
+    const config = getAiradoroConfig();
     let seconds = 0;
+    let total = config.work;
     if (snap.phase === "idle") {
-      const config = getAiradoroConfig();
       seconds = config.work;
     } else {
       seconds = Airadoro.remaining() ?? 0;
+      total = snap.phase === "rest" ? config.rest : config.work;
     }
     clockEl.textContent = AiradoroEngine.clock(seconds);
+    const pct = snap.phase === "idle"
+      ? 0
+      : Math.min(100, Math.max(0, Math.round(((total - seconds) / Math.max(1, total)) * 100)));
+    progressTrack.style.display = snap.phase === "idle" ? "none" : "";
+    progressFill.style.width = `${pct}%`;
+    progressFill.style.background = snap.phase === "rest" ? "#22C55E" : ACCENT_COLOR;
   }
 
   function syncTimer() {
@@ -218,18 +236,39 @@ export function buildAiradoroCard(): AiradoroCardHost {
     // 3. Controls
     clear(controlsEl);
     if (snap.phase === "idle") {
-      controlsEl.append(createBtn(t("Start"), true, () => Airadoro.begin()));
+      const workMins = loadStoredMinutes(AIRADORO_STORAGE_WORK, DEFAULT_WORK_MINUTES);
+      const durSeg = h("div", { class: "airadoro-dur-seg" });
+      for (const mins of [15, 25, 45]) {
+        durSeg.append(
+          h("button", {
+            type: "button",
+            class: workMins === mins ? "airadoro-dur-btn on" : "airadoro-dur-btn",
+            text: `${mins}m`,
+            onclick: () => {
+              saveStoredMinutes(AIRADORO_STORAGE_WORK, mins);
+              sync();
+            },
+          }),
+        );
+      }
+      controlsEl.append(durSeg, createBtn(t("Start"), true, () => Airadoro.begin()));
     } else if (snap.paused) {
       controlsEl.append(createBtn(t("Resume"), true, () => Airadoro.resume()));
+      if (Airadoro.taskId) {
+        controlsEl.append(createBtn(t("Done"), true, () => Airadoro.completeFocusedTask(), "#22C55E"));
+      }
       controlsEl.append(createBtn(t("Stop"), false, () => Airadoro.stop()));
     } else {
       controlsEl.append(createBtn(t("Pause"), false, () => Airadoro.pause()));
+      if (Airadoro.taskId) {
+        controlsEl.append(createBtn(t("Done"), true, () => Airadoro.completeFocusedTask(), "#22C55E"));
+      }
       controlsEl.append(createBtn(t("Stop"), false, () => Airadoro.stop()));
     }
 
     // 4. Banner (phase transition banner takes priority; otherwise active task title)
     const banner = snap.paused ? null : Airadoro.banner();
-    const taskLabel = snap.phase !== "idle" ? Airadoro.taskTitle : null;
+    const taskLabel = snap.phase !== "idle" && Airadoro.taskTitle ? `🎯 ${Airadoro.taskTitle}` : null;
     const text = banner ?? taskLabel;
     if (text) {
       bannerEl.textContent = text;

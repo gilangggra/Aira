@@ -344,6 +344,78 @@ export function upcomingHourly(
   return hourly.slice(start, start + limit);
 }
 
+export interface RainPeakInfo {
+  hour: string;
+  precipProb: number;
+}
+
+export type WeatherAdvisory =
+  | { kind: "rain-likely"; hour: string; prob: number }
+  | { kind: "rain-clearing"; hour: string }
+  | { kind: "rain-ongoing" }
+  | { kind: "aqi"; value: number }
+  | { kind: "uv"; value: number };
+
+const RAIN_KINDS: ReadonlySet<WeatherKind> = new Set(["rain", "drizzle", "storm"]);
+
+function shortHour(isoTime: string): string {
+  const idx = isoTime.indexOf("T");
+  return idx >= 0 ? isoTime.slice(idx + 1, idx + 6) : isoTime;
+}
+
+/** Finds the most notable rain chance in the next `hoursAhead` hours (>= 30%). */
+export function upcomingRainPeak(
+  snap: WeatherSnapshot,
+  now = new Date(),
+  hoursAhead = 6,
+): RainPeakInfo | null {
+  const hours = upcomingHourly(snap.hourly, now, hoursAhead);
+  let best: WeatherHourlyPoint | null = null;
+  for (const pt of hours) {
+    if (pt.precipProb >= 30 && (!best || pt.precipProb > best.precipProb)) {
+      best = pt;
+    }
+  }
+  if (!best) return null;
+  return { hour: shortHour(best.time), precipProb: best.precipProb };
+}
+
+/** Derives a concise 1-line weather/air-quality advisory from current & upcoming hours. */
+export function weatherAdvisory(
+  snap: WeatherSnapshot,
+  now = new Date(),
+): WeatherAdvisory | null {
+  const curKind = wmoCondition(snap.weatherCode, snap.isDay).kind;
+  const isRainingNow = (snap.precipitationMm ?? 0) > 0 || RAIN_KINDS.has(curKind);
+  const nextHours = upcomingHourly(snap.hourly, now, 6);
+
+  if (isRainingNow) {
+    const clearPt = nextHours.slice(1).find((pt) => {
+      const k = wmoCondition(pt.weatherCode, true).kind;
+      return pt.precipProb < 35 && !RAIN_KINDS.has(k);
+    });
+    if (clearPt) {
+      return { kind: "rain-clearing", hour: shortHour(clearPt.time) };
+    }
+    return { kind: "rain-ongoing" };
+  }
+
+  const rainPt = nextHours.find((pt) => pt.precipProb >= 50);
+  if (rainPt) {
+    return { kind: "rain-likely", hour: shortHour(rainPt.time), prob: rainPt.precipProb };
+  }
+
+  if (snap.usAqi != null && snap.usAqi >= 101) {
+    return { kind: "aqi", value: snap.usAqi };
+  }
+
+  if (snap.uvIndex >= 8) {
+    return { kind: "uv", value: Math.round(snap.uvIndex) };
+  }
+
+  return null;
+}
+
 /** In-memory latest snapshot so compact island & header stay in sync without re-parsing. */
 class WeatherStore {
   snapshot: WeatherSnapshot | null = loadWeatherCache();

@@ -29,7 +29,8 @@ export type IslandViewName =
   | "launch"
   | "agenda"
   | "reminder"
-  | "weather";
+  | "weather"
+  | "clipboard";
 
 export type BotStateName =
   | "idle"
@@ -112,6 +113,8 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   reminder: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
   // Live local weather & air quality: Mochi on the left, atmospheric card + forecast on the right.
   weather: { height: 272, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
+  // Clipboard history manager: Mochi on the left, searchable & pinnable clip list on the right.
+  clipboard: { height: 264, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
 };
 
 // The upload views above are only the fallback geometry. Once a file is actually
