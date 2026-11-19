@@ -8,6 +8,7 @@ import {
   type AiradoroEvent,
   type AiradoroSnapshot,
 } from "../core/airadoro";
+import { loadAgendaTasks, toggleAgendaTask } from "../core/agenda";
 import { Sound } from "../core/sound";
 import { State, type AgentTask } from "../core/state";
 import { Bridge } from "../core/bridge";
@@ -22,6 +23,7 @@ class AiradoroManager {
   private island: Island | null = null;
   private registered = false;
   private activeTask: string | null = null;
+  private activeTaskId: string | null = null;
 
   get snapshot(): AiradoroSnapshot {
     return this.snap;
@@ -29,6 +31,10 @@ class AiradoroManager {
 
   get taskTitle(): string | null {
     return this.activeTask;
+  }
+
+  get taskId(): string | null {
+    return this.activeTaskId;
   }
 
   register(island: Island) {
@@ -62,7 +68,7 @@ class AiradoroManager {
   }
 
   /** Enables Airadoro if needed and starts a focus session for a specific task. */
-  startForTask(title: string): boolean {
+  startForTask(title: string, taskId?: string): boolean {
     if (!this.isPillActive()) {
       const next = toggleDeclared(State.settings, AIRADORO_ID, State.os);
       if (!next) return false;
@@ -71,7 +77,23 @@ class AiradoroManager {
       void Bridge.saveSettings(State.settings);
     }
     this.activeTask = title.trim() || null;
+    this.activeTaskId = taskId ?? null;
     this.begin();
+    return true;
+  }
+
+  /** Marks the currently focused agenda task as done and stops the focus session. */
+  completeFocusedTask(): boolean {
+    const id = this.activeTaskId;
+    if (!id) return false;
+    const tasks = loadAgendaTasks();
+    const match = tasks.find((item) => item.id === id);
+    if (match && !match.completed) {
+      toggleAgendaTask(tasks, id);
+    }
+    Sound.play("finish");
+    this.island?.emote("happy");
+    this.stop();
     return true;
   }
 
@@ -96,6 +118,7 @@ class AiradoroManager {
     this.snap = AiradoroEngine.stop();
     this.noticeUntil = null;
     this.activeTask = null;
+    this.activeTaskId = null;
     this.stopTimer();
     this.paintIdle();
     State.notify();

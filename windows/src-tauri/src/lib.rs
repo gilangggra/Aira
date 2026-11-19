@@ -8,6 +8,7 @@ mod chat;
 mod claude;
 mod claude_code;
 mod cli_relay;
+mod clipboard;
 mod codex_plan;
 mod config_file;
 mod desktop;
@@ -1032,6 +1033,9 @@ pub fn run() {
             weather::fetch_weather,
             weather::search_weather_city,
             weather::detect_weather_location,
+            clipboard::clipboard_read_text,
+            clipboard::clipboard_write_text,
+            clipboard::clipboard_set_paused,
             desktop::desktop_mochi_info,
             desktop::desktop_mochi_pick_up,
             desktop::desktop_mochi_carry,
@@ -1118,6 +1122,7 @@ pub fn run() {
             desktop::setup(&handle);
             flow::setup(&handle);
             notes::setup(&handle);
+            clipboard::setup(&handle);
 
             if let Some(win) = island::window(&handle) {
                 // Where Tauri takes the drop itself (Linux), its paths are the

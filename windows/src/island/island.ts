@@ -2,7 +2,7 @@
 // Mirrors IslandRootView.swift + IslandWindowController.swift.
 
 import { Tracked, Spring, clamp } from "../core/anim";
-import { Bridge, IS_TAURI, onDragDrop, type DragDropPayload } from "../core/bridge";
+import { Bridge, IS_TAURI, onDragDrop, onEvent, type DragDropPayload } from "../core/bridge";
 import {
   CLOSED_BOT_D, CLOSED_H, closedContent, closedIsland, closedWidth, type ClosedContent,
 } from "../core/closed";
@@ -25,8 +25,9 @@ import { USC, UploadSeq, uploadProgressCurve } from "../upload/sequence";
 import { dominantPct, planColor } from "../core/plan";
 import { dueAgendaReminders, loadAgendaTasks, markReminderNotified, pendingCountForDate } from "../core/agenda";
 import { dayKey } from "../core/calendar";
-import { Weather, formatTemp, wmoCondition } from "../core/weather";
-import { AIRADORO_ID } from "../core/airadoro";
+import { Weather, WEATHER_TTL_SEC, aqiInfo, formatTemp, upcomingRainPeak, wmoCondition } from "../core/weather";
+import { Clipboard } from "../core/clipboard";
+import { AIRADORO_ID, AiradoroEngine } from "../core/airadoro";
 import { Airadoro } from "./airadoro";
 import { language, t, tl } from "../i18n/i18n";
 import { claudeCompactPillVisible, closePlanCard, openPlanColor, planCardOpen } from "../views/usage";
@@ -52,7 +53,7 @@ const BOT_SIDE = 24;
 const HIT_MARGIN = 14;
 
 /** The views with a text field: the island takes the keyboard while one is on. */
-const TYPING_VIEWS: ReadonlySet<IslandViewName> = new Set(["prompt", "launch", "agenda"]);
+const TYPING_VIEWS: ReadonlySet<IslandViewName> = new Set(["prompt", "launch", "agenda", "clipboard"]);
 
 /** The three views the drop sequence owns; leaving them stops the engine. */
 const UPLOAD_VIEWS: ReadonlySet<IslandViewName> = new Set(["upload", "uploading", "choose"]);
@@ -100,6 +101,10 @@ export class Island {
   private compactAgendaLabel!: HTMLElement;
   private compactWeather!: HTMLElement;
   private compactWeatherLabel!: HTMLElement;
+  private compactWeatherDot!: HTMLElement;
+  private compactAiradoro!: HTMLElement;
+  private compactAiradoroLabel!: HTMLElement;
+  private compactAiradoroTimer: number | null = null;
   private wakeStrip!: HTMLElement;
 
   private header!: ViewHost;
@@ -186,6 +191,9 @@ export class Island {
       this.ensureRunning();
     });
     void Weather.ensureLoaded(false);
+    window.setInterval(() => {
+      void Weather.ensureLoaded(false);
+    }, WEATHER_TTL_SEC * 1000);
   }
 
   /** The request has its answer: the card goes and the session carries on. */
@@ -325,11 +333,20 @@ export class Island {
         this.collapse();
       },
       emote: (name) => this.emote(name),
-      focusTask: (title) => {
-        if (Airadoro.startForTask(title)) {
+      focusTask: (title, taskId) => {
+        if (Airadoro.startForTask(title, taskId)) {
           State.setFocus(AIRADORO_ID);
           this.setView("overview");
         }
+      },
+      sendToChat: (text) => {
+        State.promptContext = {
+          kind: "window",
+          appName: t("Clipboard"),
+          title: text.trim().slice(0, 140),
+          url: /^https?:\/\/\S+$/i.test(text.trim()) ? text.trim() : undefined,
+        };
+        this.setView("prompt");
       },
       holdOpen: (on) => {
         if (this.holdingOpen === on) return;
@@ -392,6 +409,7 @@ export class Island {
       this.compactAgendaLabel,
     );
     this.compactWeatherLabel = h("span", { class: "compact-weather-label" });
+    this.compactWeatherDot = h("i", { class: "compact-weather-dot" });
     this.compactWeather = h(
       "button",
       {
@@ -407,6 +425,29 @@ export class Island {
         },
       },
       this.compactWeatherLabel,
+      this.compactWeatherDot,
+    );
+    this.compactAiradoroLabel = h("span", { class: "compact-airadoro-label" });
+    this.compactAiradoro = h(
+      "button",
+      {
+        id: "compact-airadoro",
+        title: "Airadoro",
+        onmousedown: (e) => {
+          e.stopPropagation();
+        },
+        onclick: (e) => {
+          e.stopPropagation();
+          const me = e as MouseEvent;
+          if (me.button === 0) {
+            Sound.play("click");
+            State.setFocus(AIRADORO_ID);
+            this.expand("overview");
+          }
+        },
+      },
+      h("i", { class: "compact-airadoro-dot" }),
+      this.compactAiradoroLabel,
     );
 
     this.header = buildHeader(actions);
@@ -446,6 +487,7 @@ export class Island {
       this.compactPlan,
       this.compactAgenda,
       this.compactWeather,
+      this.compactAiradoro,
       this.clockEl,
       this.closedEl,
       this.countdown,
@@ -1186,6 +1228,8 @@ export class Island {
     });
 
     void onDragDrop((e) => this.onDragDrop(e));
+    void onEvent<string>("clipboard-text", (text) => Clipboard.capture(text));
+    if (Clipboard.paused) void Bridge.clipboardSetPaused(true);
 
     // Outside Tauri (plain browser) drive the cursor from DOM events so the
     // island can be inspected with `npm run dev`.
@@ -1628,6 +1672,38 @@ export class Island {
       this.compactPlanLabel.textContent = pct != null ? `${Math.round(pct)}%` : "—";
     }
 
+    // Compact Airadoro live focus countdown pill
+    const airaSnap = Airadoro.snapshot;
+    const showAiradoro = State.mode === "compact" && airaSnap.phase !== "idle";
+    this.compactAiradoro.style.opacity = showAiradoro ? "1" : "0";
+    this.compactAiradoro.style.pointerEvents = showAiradoro ? "auto" : "none";
+    this.compactAiradoro.classList.toggle("rest", airaSnap.phase === "rest");
+    this.compactAiradoro.classList.toggle("paused", airaSnap.paused);
+    if (showAiradoro) {
+      const others = State.otherTasks.slice(0, 4);
+      let rightOffset = others.length > 0 ? 58 : 20;
+      if (showPlan) rightOffset += 48;
+      this.compactAiradoro.style.right = `${rightOffset}px`;
+      const rem = Airadoro.remaining() ?? 0;
+      this.compactAiradoroLabel.textContent = AiradoroEngine.clock(rem);
+      this.compactAiradoro.title = Airadoro.taskTitle ? `🎯 ${Airadoro.taskTitle}` : "Airadoro";
+    }
+    const tickCompactAiradoro = showAiradoro && !airaSnap.paused;
+    if (tickCompactAiradoro && this.compactAiradoroTimer == null) {
+      this.compactAiradoroTimer = window.setInterval(() => {
+        if (State.mode !== "compact" || Airadoro.snapshot.phase === "idle" || Airadoro.snapshot.paused) {
+          if (this.compactAiradoroTimer != null) window.clearInterval(this.compactAiradoroTimer);
+          this.compactAiradoroTimer = null;
+          return;
+        }
+        const rem = Airadoro.remaining() ?? 0;
+        this.compactAiradoroLabel.textContent = AiradoroEngine.clock(rem);
+      }, 1000);
+    } else if (!tickCompactAiradoro && this.compactAiradoroTimer != null) {
+      window.clearInterval(this.compactAiradoroTimer);
+      this.compactAiradoroTimer = null;
+    }
+
     // Compact agenda pending tasks indicator
     const pendingToday = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
     const showAgenda = State.mode === "compact" && pendingToday > 0;
@@ -1637,6 +1713,7 @@ export class Island {
       const others = State.otherTasks.slice(0, 4);
       let rightOffset = others.length > 0 ? 58 : 20;
       if (showPlan) rightOffset += 48;
+      if (showAiradoro) rightOffset += 62;
       this.compactAgenda.style.right = `${rightOffset}px`;
       this.compactAgendaLabel.textContent = String(pendingToday);
     }
@@ -1648,8 +1725,33 @@ export class Island {
     this.compactWeather.style.pointerEvents = showWeather ? "auto" : "none";
     if (showWeather && snap) {
       const cond = wmoCondition(snap.weatherCode, snap.isDay);
-      this.compactWeatherLabel.textContent = `${cond.emoji} ${formatTemp(snap.tempC, Weather.unit)}`;
-      this.compactWeather.title = `${snap.city} · ${t(cond.label)}`;
+      const isRainingNow = (snap.precipitationMm ?? 0) > 0 || cond.kind === "rain" || cond.kind === "drizzle" || cond.kind === "storm";
+      const rainSoon = upcomingRainPeak(snap, new Date(), 2);
+      const rainAlert = !isRainingNow && rainSoon != null && rainSoon.precipProb >= 55;
+      const aqi = aqiInfo(snap.usAqi);
+      const aqiAlert = aqi != null && snap.usAqi != null && snap.usAqi >= 101;
+
+      this.compactWeather.classList.toggle("rain-alert", rainAlert);
+      this.compactWeather.classList.toggle("has-aqi-dot", aqiAlert);
+      if (aqiAlert && aqi) {
+        this.compactWeatherDot.style.background = aqi.color;
+        this.compactWeatherDot.style.boxShadow = `0 0 5px ${aqi.color}`;
+      }
+
+      const tempStr = formatTemp(snap.tempC, Weather.unit);
+      this.compactWeatherLabel.textContent = rainAlert && rainSoon
+        ? `${cond.emoji} ${tempStr} · 💧${rainSoon.precipProb}%`
+        : `${cond.emoji} ${tempStr}`;
+
+      const tipParts = [
+        `${snap.city} · ${t(cond.label)}`,
+        `${t("Feels like")} ${formatTemp(snap.feelsLikeC, Weather.unit)}`,
+      ];
+      if (rainSoon) tipParts.push(`💧${rainSoon.precipProb}% (${rainSoon.hour})`);
+      if (aqi && snap.usAqi != null) tipParts.push(`AQI ${snap.usAqi}`);
+      this.compactWeather.title = tipParts.join(" · ");
+    } else {
+      this.compactWeather.classList.remove("rain-alert", "has-aqi-dot");
     }
 
     this.updateClock();

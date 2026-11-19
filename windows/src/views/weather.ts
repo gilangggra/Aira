@@ -12,8 +12,11 @@ import {
   formatWeatherLocationSub,
   isHourDaytime,
   upcomingHourly,
+  upcomingRainPeak,
   uvLevel,
+  weatherAdvisory,
   wmoCondition,
+  type WeatherAdvisory,
   type WeatherKind,
   type WeatherLocation,
   type WeatherSnapshot,
@@ -477,6 +480,41 @@ function formatClockTime(iso?: string | null): string {
   return idx >= 0 ? iso.slice(idx + 1, idx + 6) : iso;
 }
 
+function formatAdvisory(adv: WeatherAdvisory): { icon: string; text: string; tone: string } {
+  switch (adv.kind) {
+    case "rain-likely":
+      return {
+        icon: "☔",
+        text: t("Rain likely around {hour} ({prob}%)", { hour: adv.hour, prob: adv.prob }),
+        tone: "rain",
+      };
+    case "rain-clearing":
+      return {
+        icon: "🌤️",
+        text: t("Rain may clear around {hour}", { hour: adv.hour }),
+        tone: "clear",
+      };
+    case "rain-ongoing":
+      return {
+        icon: "🌧️",
+        text: t("Rain continues nearby"),
+        tone: "rain",
+      };
+    case "aqi":
+      return {
+        icon: "😷",
+        text: t("Air quality alert (AQI {aqi})", { aqi: adv.value }),
+        tone: "aqi",
+      };
+    case "uv":
+      return {
+        icon: "🕶️",
+        text: t("High UV alert (UV {uv})", { uv: adv.value }),
+        tone: "uv",
+      };
+  }
+}
+
 export function buildWeatherView(actions: ViewActions): ViewHost {
   let forecastTab: "hourly" | "daily" = "hourly";
   let hoveredHourIdx: number | null = null;
@@ -830,6 +868,7 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
       aqiRow.append(aqiBtn);
     }
 
+    const rainPeak = upcomingRainPeak(snap, new Date(), 6);
     const metrics = h(
       "div",
       { class: "weather-metrics" },
@@ -838,9 +877,11 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
       h("span", { class: "weather-metric", title: tl("UV index"), text: `☀️ UV ${Math.round(snap.uvIndex)} · ${t(uvLevel(snap.uvIndex))}` }),
       snap.precipitationMm && snap.precipitationMm > 0
         ? h("span", { class: "weather-metric", title: tl("Precipitation"), text: `🌧️ ${snap.precipitationMm.toFixed(1)} mm` })
-        : snap.cloudCover != null
-          ? h("span", { class: "weather-metric", title: tl("Cloud cover"), text: `☁️ ${snap.cloudCover}%` })
-          : null,
+        : rainPeak
+          ? h("span", { class: "weather-metric", title: tl("Rain chance"), text: `☔ ${rainPeak.precipProb}% · ${rainPeak.hour}` })
+          : snap.cloudCover != null
+            ? h("span", { class: "weather-metric", title: tl("Cloud cover"), text: `☁️ ${snap.cloudCover}%` })
+            : null,
     );
 
     const leftCol = h("div", { class: "weather-hero" }, heroMain, aqiRow, metrics);
@@ -1017,7 +1058,20 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
       }
     }
 
-    const rightCol = h("div", { class: "weather-forecast" }, forecastHead, forecastContent);
+    const advisory = weatherAdvisory(snap);
+    const advisoryEl = advisory
+      ? (() => {
+        const info = formatAdvisory(advisory);
+        return h(
+          "div",
+          { class: `weather-advisory tone-${info.tone}` },
+          h("span", { class: "weather-advisory-ico", text: info.icon }),
+          h("span", { class: "weather-advisory-text", text: info.text }),
+        );
+      })()
+      : null;
+
+    const rightCol = h("div", { class: "weather-forecast" }, forecastHead, forecastContent, advisoryEl);
     bodyEl.append(leftCol, rightCol);
   }
 
