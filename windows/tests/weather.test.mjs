@@ -13,7 +13,9 @@ import {
   saveWeatherLocation,
   saveWeatherUnit,
   upcomingHourly,
+  upcomingRainPeak,
   uvLevel,
+  weatherAdvisory,
   wmoCondition,
 } from "../src/core/weather.ts";
 
@@ -196,4 +198,60 @@ test("formatWeatherLocationSub disambiguates same-named regions with admin2/admi
   ];
   assert.equal(formatWeatherLocationSub(dupResults[0], dupResults), "East Java, Indonesia (-7.45, 112.41)");
   assert.equal(formatWeatherLocationSub(dupResults[1], dupResults), "East Java, Indonesia (-8.17, 111.76)");
+});
+
+test("upcomingRainPeak and weatherAdvisory detect rain, clearing, AQI, and UV alerts", () => {
+  const now = new Date(2026, 10, 19, 10, 15);
+  const baseSnap = {
+    city: "Jakarta",
+    latitude: -6.2,
+    longitude: 106.8,
+    fetchedAt: 1000,
+    tempC: 30,
+    feelsLikeC: 34,
+    humidity: 72,
+    windKmh: 12,
+    uvIndex: 4,
+    precipitationMm: 0,
+    isDay: true,
+    weatherCode: 2,
+    usAqi: 45,
+    pm25: 10,
+    pm10: 18,
+    hourly: [
+      { time: "2026-11-19T10:00", tempC: 30, weatherCode: 2, precipProb: 15 },
+      { time: "2026-11-19T11:00", tempC: 31, weatherCode: 3, precipProb: 65 },
+      { time: "2026-11-19T12:00", tempC: 29, weatherCode: 61, precipProb: 80 },
+    ],
+    daily: [],
+  };
+
+  assert.deepEqual(upcomingRainPeak(baseSnap, now, 6), { hour: "12:00", precipProb: 80 });
+  assert.deepEqual(weatherAdvisory(baseSnap, now), { kind: "rain-likely", hour: "11:00", prob: 65 });
+
+  const rainingSnap = {
+    ...baseSnap,
+    weatherCode: 63,
+    precipitationMm: 1.4,
+    hourly: [
+      { time: "2026-11-19T10:00", tempC: 27, weatherCode: 63, precipProb: 85 },
+      { time: "2026-11-19T11:00", tempC: 27, weatherCode: 61, precipProb: 60 },
+      { time: "2026-11-19T12:00", tempC: 28, weatherCode: 2, precipProb: 20 },
+    ],
+  };
+  assert.deepEqual(weatherAdvisory(rainingSnap, now), { kind: "rain-clearing", hour: "12:00" });
+
+  const aqiSnap = {
+    ...baseSnap,
+    usAqi: 135,
+    hourly: [{ time: "2026-11-19T10:00", tempC: 30, weatherCode: 1, precipProb: 10 }],
+  };
+  assert.equal(upcomingRainPeak(aqiSnap, now, 6), null);
+  assert.deepEqual(weatherAdvisory(aqiSnap, now), { kind: "aqi", value: 135 });
+
+  const uvSnap = { ...aqiSnap, usAqi: 40, uvIndex: 9.2 };
+  assert.deepEqual(weatherAdvisory(uvSnap, now), { kind: "uv", value: 9 });
+
+  const calmSnap = { ...uvSnap, uvIndex: 3.1 };
+  assert.equal(weatherAdvisory(calmSnap, now), null);
 });

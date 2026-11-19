@@ -16,8 +16,10 @@ import {
   type AgendaRepeat,
   type AgendaTask,
 } from "../core/agenda";
+import { AiradoroEngine } from "../core/airadoro";
 import { dayKey, monthDays } from "../core/calendar";
 import { State } from "../core/state";
+import { Airadoro } from "../island/airadoro";
 import { language, t, tl } from "../i18n/i18n";
 import { clear, h, svg } from "./dom";
 import { ICONS } from "./icons";
@@ -509,20 +511,30 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
         ? h("span", { class: "agenda-task-time", text: task.time })
         : null;
 
+      const isFocusing =
+        !task.completed && Airadoro.taskId === task.id && Airadoro.snapshot.phase !== "idle";
+      const focusClock = isFocusing
+        ? h("span", {
+            class: "agenda-focus-clock",
+            text: AiradoroEngine.clock(Airadoro.remaining() ?? 0),
+          })
+        : null;
+
       const focusBtn = task.completed
         ? null
         : h(
             "button",
             {
               type: "button",
-              class: "agenda-focus",
+              class: isFocusing ? "agenda-focus on" : "agenda-focus",
               title: t("Start"),
               onclick: () => {
                 actions.blip();
-                actions.focusTask?.(task.title);
+                actions.focusTask?.(task.title, task.id);
               },
             },
             svg(ICONS.timer, 11),
+            focusClock,
           );
 
       const delBtn = h(
@@ -542,7 +554,44 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
         svg(ICONS.xmark, 10),
       );
 
-      listEl.append(h("div", { class: "agenda-item" }, checkBtn, titleEl, repeatEl, timeEl, focusBtn, delBtn));
+      listEl.append(
+        h(
+          "div",
+          { class: isFocusing ? "agenda-item focusing" : "agenda-item" },
+          checkBtn,
+          titleEl,
+          repeatEl,
+          timeEl,
+          focusBtn,
+          delBtn,
+        ),
+      );
+    }
+  }
+
+  let focusClockTimer: number | null = null;
+  function syncFocusClockTimer() {
+    const active =
+      el.isConnected &&
+      State.mode === "expanded" &&
+      State.view === "agenda" &&
+      Airadoro.snapshot.phase !== "idle" &&
+      !Airadoro.snapshot.paused &&
+      Airadoro.taskId != null;
+
+    if (active && focusClockTimer == null) {
+      focusClockTimer = window.setInterval(() => {
+        const clockEl = listEl.querySelector<HTMLElement>(".agenda-focus-clock");
+        if (!clockEl || !el.isConnected || State.view !== "agenda" || Airadoro.snapshot.phase === "idle") {
+          if (focusClockTimer != null) window.clearInterval(focusClockTimer);
+          focusClockTimer = null;
+          return;
+        }
+        clockEl.textContent = AiradoroEngine.clock(Airadoro.remaining() ?? 0);
+      }, 1000);
+    } else if (!active && focusClockTimer != null) {
+      window.clearInterval(focusClockTimer);
+      focusClockTimer = null;
     }
   }
 
@@ -553,6 +602,7 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
       tasks = loadAgendaTasks();
       renderCalendar();
       renderTasks();
+      syncFocusClockTimer();
     },
     focus() {
       input.focus();

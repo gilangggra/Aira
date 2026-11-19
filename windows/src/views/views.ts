@@ -27,6 +27,7 @@ import { buildUpdate } from "./update";
 import { buildWhatsNew } from "./whatsnew";
 import { buildLaunch } from "./launch";
 import { buildAgendaView, buildReminderView } from "./agenda";
+import { buildClipboardView } from "./clipboard";
 import { buildWeatherView } from "./weather";
 import { buildSpotifyCard, buildSpotifyPill, type SpotifyPillHost } from "./spotify";
 import { SPOTIFY_ID } from "../core/spotify";
@@ -74,8 +75,10 @@ export interface ViewActions {
   launched(): void;
   /** Triggers a Mochi emote animation on the island. */
   emote?(name: BotEmoteName): void;
-  /** Starts an Airadoro focus timer for the given agenda task title. */
-  focusTask?(title: string): void;
+  /** Starts an Airadoro focus timer for the given agenda task. */
+  focusTask?(title: string, taskId?: string): void;
+  /** Opens the AI chat view with clipboard text attached as context. */
+  sendToChat?(text: string): void;
 }
 
 export interface ViewHost {
@@ -150,6 +153,11 @@ export function buildHeader(actions: ViewActions): ViewHost {
     { class: "tab tab-weather", title: tl("Weather"), onclick: () => go("weather") },
     svg(ICONS.cloudSun, 17, { stroke: 1.7 }),
   );
+  const tabClipboard = h(
+    "button",
+    { class: "tab tab-clipboard", title: tl("Clipboard"), onclick: () => go("clipboard") },
+    svg(ICONS.clipboard, 16, { stroke: 1.7 }),
+  );
 
   const gearBtn = h("button", { title: tl("Settings"), onclick: () => go("settings") }, svg(ICONS.gearLine, 18, { stroke: 1.6 }));
   const soundBtn = h("button", { title: tl("Mute"), onclick: () => actions.toggleSound() }, svg(ICONS.speakerLine, 18, { stroke: 1.6 }));
@@ -170,7 +178,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
   const el = h(
     "div",
     { id: "header" },
-    h("div", { class: "tabs" }, tabHome, tabChat, tabDrop, tabLaunch, tabAgenda, tabWeather),
+    h("div", { class: "tabs" }, tabHome, tabChat, tabDrop, tabLaunch, tabAgenda, tabWeather, tabClipboard),
     h("div", { class: "header-actions" }, planPills, gearBtn, soundBtn, closeBtn),
   );
   const headerActions = el.lastElementChild as HTMLElement;
@@ -185,6 +193,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
       tabLaunch.classList.toggle("on", v === "launch");
       tabAgenda.classList.toggle("on", v === "agenda");
       tabWeather.classList.toggle("on", v === "weather");
+      tabClipboard.classList.toggle("on", v === "clipboard");
       const todayPending = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
       tabAgenda.classList.toggle("has-pending", todayPending > 0);
       gearBtn.classList.toggle("on", v === "settings");
@@ -925,6 +934,7 @@ export function buildViews(
   map.set("agenda", buildAgendaView(actions));
   map.set("reminder", buildReminderView(actions));
   map.set("weather", buildWeatherView(actions));
+  map.set("clipboard", buildClipboardView(actions));
   // Not in the Windows v1: sending a file by email, window attach + web result.
   map.set("mail", buildPlaceholder(tl("Sending by email isn't in this version."), ""));
   map.set("searching", buildPlaceholder(tl("Claude is searching…"), ""));

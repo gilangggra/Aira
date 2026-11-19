@@ -4089,29 +4089,48 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   background: rgba(244, 80, 94, 0.15);
 }
 
+.agenda-item.focusing {
+  background: rgba(14, 165, 233, 0.11);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.35);
+}
+
 .agenda-focus {
   border: 0;
-  background: transparent;
-  color: rgba(56, 189, 248, 0.75);
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  display: grid;
-  place-items: center;
-  padding: 0;
+  background: rgba(56, 189, 248, 0.08);
+  color: rgba(125, 211, 252, 0.85);
+  height: 18px;
+  min-width: 18px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 4px;
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.78;
   flex: 0 0 auto;
   transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 
-.agenda-item:hover .agenda-focus {
+.agenda-item:hover .agenda-focus,
+.agenda-focus.on {
   opacity: 1;
 }
 
 .agenda-focus:hover {
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.16);
+  color: #fff;
+  background: rgba(56, 189, 248, 0.25);
+}
+
+.agenda-focus.on {
+  background: rgba(14, 165, 233, 0.24);
+  color: #7dd3fc;
+  padding: 0 6px;
+}
+
+.agenda-focus-clock {
+  font: 600 9.5px var(--font);
+  font-variant-numeric: tabular-nums;
 }
 
 .agenda-form {
@@ -5266,4 +5285,443 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 .agenda-seg-btn.on {
   background: rgba(167, 139, 250, 0.24);
   color: #ddd6fe;
+}
+
+/* ── Agenda <-> Airadoro Focus Integration ────────────────────────────────── */
+#compact-airadoro {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  border-radius: 999px;
+  background: #0e0f11;
+  color: #7dd3fc;
+  font: 600 10.5px var(--font);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 6;
+  transition: opacity 0.16s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+#compact-airadoro:hover {
+  background: rgba(14, 165, 233, 0.2);
+  border-color: rgba(56, 189, 248, 0.6);
+  color: #fff;
+}
+
+#compact-airadoro.rest {
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #86efac;
+}
+
+#compact-airadoro.paused {
+  opacity: 0.72;
+}
+
+#compact-airadoro .compact-airadoro-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.85);
+  flex-shrink: 0;
+}
+
+#compact-airadoro.rest .compact-airadoro-dot {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.85);
+}
+
+.airadoro-progress-track {
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.airadoro-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: #0ea5e9;
+  transition: width 0.45s ease, background 0.25s ease;
+}
+
+.airadoro-dur-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.airadoro-dur-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 2px 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  font: 600 10px var(--font);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+
+.airadoro-dur-btn:hover {
+  color: #fff;
+}
+
+.airadoro-dur-btn.on {
+  background: rgba(14, 165, 233, 0.26);
+  color: #7dd3fc;
+}
+
+/* ── Clipboard History Manager ─────────────────────────────────────────────── */
+.clip-view {
+  padding: 6px 14px 12px 94px;
+}
+
+.clip-shell {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 13px;
+  padding: 8px 10px;
+}
+
+.clip-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.clip-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  padding: 0 8px;
+  color: var(--ink);
+  font: 400 11px var(--font);
+  outline: none;
+}
+
+.clip-search:focus {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.clip-search::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.clip-filters {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.clip-ftab {
+  height: 18px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 7px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 10px var(--font);
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+
+.clip-ftab.on {
+  background: rgba(56, 189, 248, 0.22);
+  color: #7dd3fc;
+}
+
+.clip-pause-btn,
+.clip-clear-btn {
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.055);
+  color: #cbd5e1;
+  font: 600 10px var(--font);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+
+.clip-pause-btn:hover,
+.clip-clear-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.clip-pause-btn.paused {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+}
+
+.clip-clear-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.clip-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.clip-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+}
+
+.clip-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.clip-item.pinned {
+  background: rgba(56, 189, 248, 0.07);
+  border-color: rgba(56, 189, 248, 0.22);
+}
+
+.clip-item.copied {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.clip-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  flex: 0 0 auto;
+}
+
+.clip-kind-badge {
+  font-size: 11px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.clip-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clip-preview {
+  font: 400 11px/1.3 var(--font);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clip-meta {
+  font: 500 9.5px var(--font);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.clip-copied-tag {
+  font: 600 9.5px var(--font);
+  color: #4ade80;
+}
+
+.clip-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.clip-act {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.58);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.clip-act:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.clip-act.pin.on {
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+}
+
+.clip-act.del:hover {
+  background: rgba(244, 80, 94, 0.22);
+  color: #fca5a5;
+}
+
+.clip-empty {
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.42);
+  font: 400 11px var(--font);
+}
+
+.clip-empty svg {
+  opacity: 0.35;
+}
+
+
+/* ── Compact Weather Alert & Advisory Banner ─────────────────────────────── */
+
+#compact-weather.rain-alert {
+  background: rgba(56, 189, 248, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.28);
+}
+
+.compact-weather-dot {
+  display: none;
+  width: 5.5px;
+  height: 5.5px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+#compact-weather.has-aqi-dot .compact-weather-dot {
+  display: inline-block;
+}
+
+.weather-advisory {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+  font: 500 10px/1.2 var(--font);
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.weather-advisory.tone-rain {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.25);
+  color: #bae6fd;
+}
+
+.weather-advisory.tone-clear {
+  background: rgba(250, 204, 21, 0.1);
+  border-color: rgba(250, 204, 21, 0.22);
+  color: #fef08a;
+}
+
+.weather-advisory.tone-aqi {
+  background: rgba(251, 146, 60, 0.12);
+  border-color: rgba(251, 146, 60, 0.28);
+  color: #fed7aa;
+}
+
+.weather-advisory.tone-uv {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.28);
+  color: #fde68a;
+}
+
+.weather-advisory-ico {
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+
+.weather-advisory-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* ── Clipboard Enhancements (Code, Privacy Shield, Keyboard Selection) ───── */
+
+.clip-item.selected {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.clip-kind-badge.code {
+  font: 700 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 5px;
+  padding: 1px 4px;
+}
+
+.clip-kind-badge.secret {
+  font-size: 11px;
+}
+
+.clip-preview.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  color: #cbd5e1;
+}
+
+.clip-preview.masked {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  color: #fcd34d;
+}
+
+.clip-act.on {
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.16);
 }
