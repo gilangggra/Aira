@@ -389,6 +389,7 @@ export const Bridge = {
   chatSend: (query: string, context: ChatContext | null, mail = false) =>
     callOrThrow<{ text: string }>("chat_send", { query, context, mail }),
   chatReset: () => call<void>("chat_reset"),
+  chatRestore: (turns: [string, string][]) => call<void>("chat_restore", { turns }),
   /**
    * The models a provider offers, for the picker in the chat view. Rust asks
    * the provider only when it has a key (or a server address).

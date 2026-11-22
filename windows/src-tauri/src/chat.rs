@@ -78,6 +78,24 @@ impl Chat {
         *c = Conversation { epoch, ..Default::default() };
     }
 
+    /// Restores a previously saved conversation's plain-text turns so the next
+    /// prompt continues with that session's context regardless of provider.
+    pub fn restore(&self, turns: Vec<(String, String)>) {
+        let mut c = self.inner.lock().unwrap();
+        let epoch = c.epoch + 1;
+        let plain: Vec<Value> = turns
+            .into_iter()
+            .filter(|(role, content)| (role == "user" || role == "assistant") && !content.trim().is_empty())
+            .map(|(role, content)| json!({ "role": role, "content": content }))
+            .collect();
+        *c = Conversation {
+            epoch,
+            owner: None,
+            native: Vec::new(),
+            plain,
+        };
+    }
+
     /// Starts a turn with `provider`, converting the history if another
     /// provider answered the previous turns.
     pub fn begin(&self, provider: &str) -> Turn {

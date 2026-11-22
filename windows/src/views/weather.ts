@@ -25,135 +25,14 @@ import { language, t, tl } from "../i18n/i18n";
 import { clear, h, svg } from "./dom";
 import { ICONS } from "./icons";
 import type { ViewActions, ViewHost } from "./views";
+import {
+  buildMetricIcon,
+  buildMiniWeatherIcon,
+  buildWeatherSceneSvg,
+  resolveWeatherScene,
+} from "./weather-art";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-
-function svgEl<K extends keyof SVGElementTagNameMap>(
-  tag: K,
-  attrs: Record<string, string | number> = {},
-): SVGElementTagNameMap[K] {
-  const el = document.createElementNS(SVG_NS, tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    el.setAttribute(k, String(v));
-  }
-  return el;
-}
-
-/** Builds a lightweight animated SVG illustration for the current weather condition. */
-function buildWeatherArt(kind: WeatherKind, isDay: boolean): SVGSVGElement {
-  const root = svgEl("svg", {
-    viewBox: "0 0 64 64",
-    width: 54,
-    height: 54,
-    class: `weather-svg weather-svg-${kind}`,
-    "aria-hidden": "true",
-  });
-
-  if (kind === "clear" && isDay) {
-    const rays = svgEl("g", { class: "w-sun-rays", stroke: "#FBBF24", "stroke-width": 2.4, "stroke-linecap": "round" });
-    for (let i = 0; i < 8; i++) {
-      const a = (i * Math.PI) / 4;
-      rays.append(
-        svgEl("line", {
-          x1: (32 + Math.cos(a) * 18).toFixed(1),
-          y1: (32 + Math.sin(a) * 18).toFixed(1),
-          x2: (32 + Math.cos(a) * 23).toFixed(1),
-          y2: (32 + Math.sin(a) * 23).toFixed(1),
-        }),
-      );
-    }
-    root.append(rays, svgEl("circle", { cx: 32, cy: 32, r: 12, fill: "#F59E0B", class: "w-sun-core" }));
-    return root;
-  }
-
-  if (kind === "clear" && !isDay) {
-    root.append(
-      svgEl("path", {
-        d: "M38 15a16 16 0 1 0 13 25.2A13 13 0 0 1 38 15z",
-        fill: "#E2E8F0",
-        class: "w-moon",
-      }),
-      svgEl("circle", { cx: 47, cy: 18, r: 1.6, fill: "#FDE68A", class: "w-star w-star-1" }),
-      svgEl("circle", { cx: 20, cy: 17, r: 1.2, fill: "#FDE68A", class: "w-star w-star-2" }),
-    );
-    return root;
-  }
-
-  if (kind === "partly-cloudy") {
-    if (isDay) {
-      root.append(svgEl("circle", { cx: 24, cy: 24, r: 9.5, fill: "#FBBF24", class: "w-sun-core" }));
-    } else {
-      root.append(
-        svgEl("path", {
-          d: "M27 14a10 10 0 1 0 9 14.5A8.5 8.5 0 0 1 27 14z",
-          fill: "#CBD5E1",
-        }),
-      );
-    }
-    root.append(
-      svgEl("path", {
-        d: "M21 44h23a8 8 0 0 0 1.2-15.9 11 11 0 0 0-21.3-2.5A8.5 8.5 0 0 0 21 44z",
-        fill: "rgba(255,255,255,0.92)",
-        class: "w-cloud",
-      }),
-    );
-    return root;
-  }
-
-  const cloudFill = kind === "storm" ? "rgba(148,163,184,0.92)" : "rgba(226,232,240,0.92)";
-  root.append(
-    svgEl("path", {
-      d: "M17 38h28a8.5 8.5 0 0 0 1.4-16.9A11.5 11.5 0 0 0 24 18.4 9 9 0 0 0 17 38z",
-      fill: cloudFill,
-      class: "w-cloud",
-    }),
-  );
-
-  if (kind === "fog") {
-    root.append(
-      svgEl("line", { x1: 16, y1: 44, x2: 46, y2: 44, stroke: "rgba(255,255,255,0.55)", "stroke-width": 2.4, "stroke-linecap": "round" }),
-      svgEl("line", { x1: 20, y1: 50, x2: 42, y2: 50, stroke: "rgba(255,255,255,0.38)", "stroke-width": 2.4, "stroke-linecap": "round" }),
-    );
-  } else if (kind === "drizzle" || kind === "rain") {
-    const drops = kind === "rain" ? [21, 30, 39] : [25, 36];
-    for (let i = 0; i < drops.length; i++) {
-      root.append(
-        svgEl("line", {
-          x1: drops[i],
-          y1: 42,
-          x2: drops[i] - 2.5,
-          y2: 51,
-          stroke: "#38BDF8",
-          "stroke-width": 2.4,
-          "stroke-linecap": "round",
-          class: `w-drop w-drop-${i + 1}`,
-        }),
-      );
-    }
-  } else if (kind === "snow") {
-    for (const [i, cx] of [22, 32, 41].entries()) {
-      root.append(
-        svgEl("circle", {
-          cx,
-          cy: 46,
-          r: 2.1,
-          fill: "#E0F2FE",
-          class: `w-drop w-drop-${i + 1}`,
-        }),
-      );
-    }
-  } else if (kind === "storm") {
-    root.append(
-      svgEl("polygon", {
-        points: "33,38 26,48 31,48 28,57 39,45 33.5,45",
-        fill: "#FACC15",
-        class: "w-bolt",
-      }),
-    );
-  }
-
-  return root;
-}
 
 interface FxParticle {
   x: number;
@@ -182,6 +61,7 @@ class WeatherFxEngine {
   private lastTs = 0;
   private w = 520;
   private h = 194;
+  private dpr = 1;
   private flashAlpha = 0;
   private nextFlashAt = 0;
   private pointer = { x: -999, y: -999, active: false };
@@ -260,6 +140,7 @@ class WeatherFxEngine {
       this.canvas.width = pw;
       this.canvas.height = ph;
     }
+    this.dpr = dpr;
     this.w = rect.width;
     this.h = rect.height;
     if (this.ctx) this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -379,7 +260,11 @@ class WeatherFxEngine {
   private draw(now: number) {
     const ctx = this.ctx;
     if (!ctx) return;
-    ctx.clearRect(0, 0, this.w, this.h);
+    // Clear in device pixels so fractional DPI scaling never leaves an
+    // uncleared 1px column/row along the right or bottom edge.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     const k = this.scene.kind;
 
@@ -480,35 +365,35 @@ function formatClockTime(iso?: string | null): string {
   return idx >= 0 ? iso.slice(idx + 1, idx + 6) : iso;
 }
 
-function formatAdvisory(adv: WeatherAdvisory): { icon: string; text: string; tone: string } {
+function formatAdvisory(adv: WeatherAdvisory): { icon: "rain" | "cloud" | "aqi" | "uv"; text: string; tone: string } {
   switch (adv.kind) {
     case "rain-likely":
       return {
-        icon: "☔",
+        icon: "rain",
         text: t("Rain likely around {hour} ({prob}%)", { hour: adv.hour, prob: adv.prob }),
         tone: "rain",
       };
     case "rain-clearing":
       return {
-        icon: "🌤️",
+        icon: "cloud",
         text: t("Rain may clear around {hour}", { hour: adv.hour }),
         tone: "clear",
       };
     case "rain-ongoing":
       return {
-        icon: "🌧️",
+        icon: "rain",
         text: t("Rain continues nearby"),
         tone: "rain",
       };
     case "aqi":
       return {
-        icon: "😷",
+        icon: "aqi",
         text: t("Air quality alert (AQI {aqi})", { aqi: adv.value }),
         tone: "aqi",
       };
     case "uv":
       return {
-        icon: "🕶️",
+        icon: "uv",
         text: t("High UV alert (UV {uv})", { uv: adv.value }),
         tone: "uv",
       };
@@ -790,44 +675,46 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
       liveBadge.classList.remove("preview");
     }
 
-    const artWrap = h(
-      "button",
-      {
-        type: "button",
-        class: "weather-art",
-        title: cond.label,
-        onclick: () => {
-          actions.blip();
-          fx.triggerBurst();
-          actions.emote?.(cond.emote);
-        },
-      },
-      buildWeatherArt(cond.kind, activeIsDay),
-    );
+    const sceneKey = resolveWeatherScene(cond.kind, activeIsDay, snap.windKmh);
 
     const tempBtn = h("button", {
       type: "button",
       class: "weather-temp",
       title: tl("Switch unit"),
       text: formatTemp(activeTempC, Weather.unit),
-      onclick: () => {
+      onclick: (e: Event) => {
+        e.stopPropagation();
         actions.blip();
         Weather.setUnit(Weather.unit === "C" ? "F" : "C");
       },
     });
-    const condText = h("div", { class: "weather-cond", text: t(cond.label) });
+    const condText = h("span", { class: "weather-cond", text: t(cond.label) });
     const feelsText = h("div", {
       class: "weather-feels",
       text: previewPt
-        ? `${formatHourLabel(previewPt.time)} · 💧${previewPt.precipProb}%`
+        ? `${formatHourLabel(previewPt.time)} · ${previewPt.precipProb}%`
         : `${t("Feels like")} ${formatTemp(snap.feelsLikeC, Weather.unit)}`,
     });
 
-    const heroMain = h(
+    const sceneCard = h(
       "div",
-      { class: "weather-hero-top" },
-      artWrap,
-      h("div", { class: "weather-hero-nums" }, tempBtn, condText, feelsText),
+      {
+        class: "weather-scene-card",
+        "data-scene": sceneKey,
+        title: t(cond.label),
+        onclick: () => {
+          actions.blip();
+          fx.triggerBurst();
+          actions.emote?.(cond.emote);
+        },
+      },
+      buildWeatherSceneSvg(sceneKey),
+      h(
+        "div",
+        { class: "weather-scene-overlay" },
+        h("div", { class: "weather-scene-head" }, tempBtn, condText),
+        feelsText,
+      ),
     );
 
     const aqi = aqiInfo(snap.usAqi);
@@ -872,19 +759,19 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
     const metrics = h(
       "div",
       { class: "weather-metrics" },
-      h("span", { class: "weather-metric", title: tl("Humidity"), text: `💧 ${snap.humidity}%` }),
-      h("span", { class: "weather-metric", title: tl("Wind"), text: `💨 ${Math.round(snap.windKmh)} km/h` }),
-      h("span", { class: "weather-metric", title: tl("UV index"), text: `☀️ UV ${Math.round(snap.uvIndex)} · ${t(uvLevel(snap.uvIndex))}` }),
+      h("span", { class: "weather-metric", title: tl("Humidity") }, buildMetricIcon("humidity", 11), h("span", { text: `${snap.humidity}%` })),
+      h("span", { class: "weather-metric", title: tl("Wind") }, buildMetricIcon("wind", 11), h("span", { text: `${Math.round(snap.windKmh)} km/h` })),
+      h("span", { class: "weather-metric", title: tl("UV index") }, buildMetricIcon("uv", 11), h("span", { text: `UV ${Math.round(snap.uvIndex)} · ${t(uvLevel(snap.uvIndex))}` })),
       snap.precipitationMm && snap.precipitationMm > 0
-        ? h("span", { class: "weather-metric", title: tl("Precipitation"), text: `🌧️ ${snap.precipitationMm.toFixed(1)} mm` })
+        ? h("span", { class: "weather-metric", title: tl("Precipitation") }, buildMetricIcon("rain", 11), h("span", { text: `${snap.precipitationMm.toFixed(1)} mm` }))
         : rainPeak
-          ? h("span", { class: "weather-metric", title: tl("Rain chance"), text: `☔ ${rainPeak.precipProb}% · ${rainPeak.hour}` })
+          ? h("span", { class: "weather-metric", title: tl("Rain chance") }, buildMetricIcon("rain", 11), h("span", { text: `${rainPeak.precipProb}% · ${rainPeak.hour}` }))
           : snap.cloudCover != null
-            ? h("span", { class: "weather-metric", title: tl("Cloud cover"), text: `☁️ ${snap.cloudCover}%` })
+            ? h("span", { class: "weather-metric", title: tl("Cloud cover") }, buildMetricIcon("cloud", 11), h("span", { text: `${snap.cloudCover}%` }))
             : null,
     );
 
-    const leftCol = h("div", { class: "weather-hero" }, heroMain, aqiRow, metrics);
+    const leftCol = h("div", { class: "weather-hero" }, sceneCard, aqiRow, metrics);
 
     const tabHourly = h("button", {
       type: "button",
@@ -946,7 +833,7 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
 
         const inspectEl = h("div", {
           class: "weather-inspect",
-          text: `${formatHourLabel(activePt.time)} · ${t(activeCond.label)}${activePt.precipProb > 0 ? ` · 💧${activePt.precipProb}%` : ""}`,
+          text: `${formatHourLabel(activePt.time)} · ${t(activeCond.label)}${activePt.precipProb > 0 ? ` · ${activePt.precipProb}%` : ""}`,
         });
         forecastHead.append(inspectEl);
 
@@ -998,7 +885,7 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
               { class: "w-bar-track" },
               h("div", { class: "w-bar-fill", style: `height:${pct}%` }),
             ),
-            h("span", { class: "w-bar-icon", text: ptCond.emoji }),
+            h("span", { class: "w-bar-icon" }, buildMiniWeatherIcon(ptCond.kind, ptDay, 14)),
             h("span", {
               class: pt.precipProb > 0 ? "w-bar-rain" : "w-bar-rain mute",
               text: pt.precipProb > 0 ? `${pt.precipProb}%` : "·",
@@ -1022,10 +909,15 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
 
         if (days[0].sunrise || days[0].sunset) {
           forecastHead.append(
-            h("div", {
-              class: "weather-inspect",
-              text: `🌅 ${formatClockTime(days[0].sunrise)} · 🌇 ${formatClockTime(days[0].sunset)}`,
-            }),
+            h(
+              "div",
+              { class: "weather-inspect weather-sun-times" },
+              buildMetricIcon("sunrise", 11),
+              h("span", { text: formatClockTime(days[0].sunrise) }),
+              h("span", { class: "w-dot-sep", text: "·" }),
+              buildMetricIcon("sunset", 11),
+              h("span", { text: formatClockTime(days[0].sunset) }),
+            ),
           );
         }
 
@@ -1043,7 +935,7 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
               "div",
               { class: "weather-daily-row" },
               h("span", { class: "w-day-name", text: formatShortDay(d.date, i) }),
-              h("span", { class: "w-day-ico", text: c.emoji, title: t(c.label) }),
+              h("span", { class: "w-day-ico", title: t(c.label) }, buildMiniWeatherIcon(c.kind, true, 14)),
               h("span", { class: "w-day-lo", text: `${lo}°` }),
               h(
                 "div",
@@ -1065,7 +957,7 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
         return h(
           "div",
           { class: `weather-advisory tone-${info.tone}` },
-          h("span", { class: "weather-advisory-ico", text: info.icon }),
+          h("span", { class: "weather-advisory-ico" }, buildMetricIcon(info.icon, 11)),
           h("span", { class: "weather-advisory-text", text: info.text }),
         );
       })()
