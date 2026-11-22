@@ -115,7 +115,7 @@ body {
 }
 
 #island::before {
-  right: 100%;
+  right: calc(100% - 0.5px);
   background: radial-gradient(
     circle at 0 100%,
     transparent calc(var(--ear, 0px) - 0.5px),
@@ -124,7 +124,7 @@ body {
 }
 
 #island::after {
-  left: 100%;
+  left: calc(100% - 0.5px);
   background: radial-gradient(
     circle at 100% 100%,
     transparent calc(var(--ear, 0px) - 0.5px),
@@ -1098,18 +1098,18 @@ input[type="range"]::-webkit-slider-thumb {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 3px 6px 3px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
   font: 400 11.5px var(--font);
   color: var(--ink-2);
-  border: 1.5px solid rgba(255, 255, 255, 0.75);
-  transform: scale(1.06);
-  transition: border-color 0.3s ease-out 0.45s, transform 0.3s ease-out 0.45s;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  transform: scale(1.05);
+  transition: border-color 0.3s ease-out 0.45s, transform 0.3s ease-out 0.45s, background 140ms ease;
 }
 
 .chip.settled {
-  border-color: rgba(255, 255, 255, 0);
+  border-color: rgba(255, 255, 255, 0.08);
   transform: scale(1);
 }
 
@@ -1118,6 +1118,34 @@ input[type="range"]::-webkit-slider-thumb {
   height: 7px;
   border-radius: 50%;
   background: linear-gradient(135deg, #ff6b5b, #f7b32b, #2dd4a7, #38bdf8, #a78bfa);
+}
+
+.chip-label {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(235, 240, 248, 0.65);
+  cursor: default;
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.chip-close:hover {
+  background: rgba(255, 69, 58, 0.28);
+  color: #ff6961;
+  transform: scale(1.08);
 }
 
 .chat-log {
@@ -1135,8 +1163,51 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .chat-row.user {
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
   padding-left: 32px;
+}
+
+.bubble-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 9px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.075);
+  border: 0.5px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  font: 500 11px var(--font);
+  color: rgba(235, 240, 248, 0.88);
+  letter-spacing: -0.01em;
+}
+
+.bubble-attachment-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #818cf8;
+  flex-shrink: 0;
+}
+
+.bubble-attachment-name {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bubble-attachment-ext {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.09);
+  font: 600 9px var(--font);
+  letter-spacing: 0.03em;
+  color: rgba(235, 240, 248, 0.62);
 }
 
 .bubble {
@@ -1368,8 +1439,284 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .chat-body.picking .chat-log,
-.chat-body.picking .chip-row {
+.chat-body.picking .chip-row,
+.chat-body.history-open .chat-log,
+.chat-body.history-open .chip-row {
   display: none;
+}
+
+/* ── Chat toolbar & Apple-styled history sessions panel ─────────────────────── */
+
+.chat-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  padding-bottom: 2px;
+}
+
+.chat-toolbar-left,
+.chat-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-toolbar-left {
+  flex: 1;
+}
+
+.chat-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(235, 240, 248, 0.78);
+  font: 500 10.5px var(--font);
+  letter-spacing: -0.01em;
+  cursor: default;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease, opacity 140ms ease;
+}
+
+.chat-tool-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.chat-tool-btn.on {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+.chat-tool-btn.danger {
+  padding: 0 7px;
+  color: rgba(235, 240, 248, 0.58);
+}
+
+.chat-tool-btn.danger:hover:not(:disabled) {
+  background: rgba(255, 69, 58, 0.14);
+  border-color: rgba(255, 69, 58, 0.32);
+  color: #ff6961;
+}
+
+.chat-tool-btn:disabled {
+  opacity: 0.38;
+}
+
+.chat-tool-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  font: 600 9px var(--font);
+  line-height: 1;
+}
+
+.chat-session-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 11px var(--font);
+  color: rgba(235, 240, 248, 0.44);
+  letter-spacing: -0.01em;
+}
+
+.chat-history-panel {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: rgba(22, 24, 30, 0.88);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.chat-body.history-open .chat-history-panel {
+  display: flex;
+}
+
+.chat-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 4px;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-history-heading {
+  font: 600 11px var(--font);
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: -0.01em;
+}
+
+.chat-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-history-clear {
+  border: 0;
+  background: transparent;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font: 500 10.5px var(--font);
+  color: rgba(255, 105, 97, 0.85);
+  cursor: default;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.chat-history-clear:hover {
+  background: rgba(255, 69, 58, 0.14);
+  color: #ff6961;
+}
+
+.chat-history-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: default;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.chat-history-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.chat-history-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-right: 2px;
+}
+
+.chat-history-group {
+  padding: 4px 4px 2px;
+  font: 600 9.5px var(--font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(235, 240, 248, 0.42);
+}
+
+.chat-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  border: 0.5px solid transparent;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: default;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.chat-history-item:hover {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.chat-history-item.active {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: rgba(129, 140, 248, 0.34);
+}
+
+.chat-history-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.chat-history-item.active .chat-history-dot {
+  background: #818cf8;
+  box-shadow: 0 0 6px rgba(129, 140, 248, 0.65);
+}
+
+.chat-history-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chat-history-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 11.5px var(--font);
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: -0.01em;
+}
+
+.chat-history-meta {
+  font: 400 10px var(--font);
+  color: rgba(235, 240, 248, 0.48);
+}
+
+.chat-history-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(235, 240, 248, 0.42);
+  opacity: 0;
+  flex-shrink: 0;
+  cursor: default;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.chat-history-item:hover .chat-history-del {
+  opacity: 1;
+}
+
+.chat-history-del:hover {
+  background: rgba(255, 69, 58, 0.16);
+  color: #ff6961;
+}
+
+.chat-history-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 10px;
+  color: rgba(235, 240, 248, 0.42);
+  font: 400 11.5px var(--font);
 }
 
 .picker-chips {
@@ -5724,4 +6071,531 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 .clip-act.on {
   color: #7dd3fc;
   background: rgba(56, 189, 248, 0.16);
+}
+
+
+/* ── Illustrated Atmospheric Weather Scene Card (Zero Emojis) ────────────── */
+
+.compact-weather-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.weather-scene-card {
+  position: relative;
+  width: 100%;
+  height: 82px;
+  border-radius: 11px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  transition: transform 0.16s ease, box-shadow 0.2s ease;
+}
+
+.weather-scene-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.weather-scene-card[data-scene="clear-day"] {
+  background: linear-gradient(155deg, #fbbf24 0%, #f59e0b 58%, #ea580c 100%);
+}
+
+.weather-scene-card[data-scene="clear-night"] {
+  background: linear-gradient(155deg, #1e1b4b 0%, #312e81 55%, #1e293b 100%);
+}
+
+.weather-scene-card[data-scene="cloudy"] {
+  background: linear-gradient(155deg, #7dd3fc 0%, #38bdf8 55%, #0284c7 100%);
+}
+
+.weather-scene-card[data-scene="windy"] {
+  background: linear-gradient(155deg, #a3cf62 0%, #74a948 58%, #4d7c0f 100%);
+}
+
+.weather-scene-card[data-scene="fog"] {
+  background: linear-gradient(155deg, #94a3b8 0%, #64748b 58%, #475569 100%);
+}
+
+.weather-scene-card[data-scene="snow"] {
+  background: linear-gradient(155deg, #a5b4fc 0%, #818cf8 55%, #6366f1 100%);
+}
+
+.weather-scene-card[data-scene="rain"] {
+  background: linear-gradient(155deg, #64748b 0%, #475569 58%, #334155 100%);
+}
+
+.weather-scene-card[data-scene="storm"] {
+  background: linear-gradient(155deg, #312e81 0%, #1e1b4b 58%, #0f172a 100%);
+}
+
+.weather-scene-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.w-windmill-blades {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: w-windmill-spin 7s linear infinite;
+}
+
+@keyframes w-windmill-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.weather-scene-overlay {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.24) 0%, rgba(15, 23, 42, 0.06) 55%, transparent 100%);
+}
+
+.weather-scene-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.weather-scene-card .weather-temp {
+  padding: 0;
+  font: 600 28px/1 var(--font);
+  letter-spacing: -0.03em;
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+}
+
+.weather-scene-card .weather-cond {
+  margin-top: 0;
+  font: 600 11px var(--font);
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.weather-scene-card .weather-feels {
+  font: 500 10px var(--font);
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+}
+
+.weather-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.w-metric-svg,
+.w-mini-svg {
+  flex: 0 0 auto;
+  display: block;
+}
+
+.w-bar-icon,
+.w-day-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weather-sun-times {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.w-dot-sep {
+  opacity: 0.5;
+}
+
+.weather-advisory-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* ── macOS / Apple Weather Clean Polish ──────────────────────────────────── */
+
+.weather-shell {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.weather-city-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.09);
+  font-weight: 500;
+}
+
+.weather-unit-btn,
+.weather-icon-btn {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.weather-scene-card {
+  height: 84px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.weather-scene-card[data-scene="clear-day"] {
+  background: linear-gradient(155deg, #f6c453 0%, #eca238 56%, #d97724 100%);
+}
+
+.weather-scene-card[data-scene="cloudy"] {
+  background: linear-gradient(155deg, #6db5ea 0%, #4b94d3 56%, #3170b8 100%);
+}
+
+.weather-scene-card[data-scene="windy"] {
+  background: linear-gradient(155deg, #8ec568 0%, #68a350 58%, #477a3a 100%);
+}
+
+.weather-scene-card .weather-temp {
+  font: 300 30px/1 var(--font);
+  letter-spacing: -0.04em;
+}
+
+.weather-scene-card .weather-cond {
+  font: 500 11.5px var(--font);
+  opacity: 0.95;
+}
+
+.weather-scene-card .weather-feels {
+  font: 400 10px var(--font);
+  opacity: 0.88;
+}
+
+.weather-aqi-card {
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.075);
+  padding: 6px 9px;
+}
+
+.weather-metrics {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 10px;
+  padding: 5px 8px;
+  gap: 4px 8px;
+}
+
+.weather-metric {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 1px 0;
+  font-weight: 500;
+  color: rgba(241, 245, 249, 0.9);
+}
+
+.weather-forecast {
+  border-left: 1px solid rgba(255, 255, 255, 0.065);
+  padding-left: 12px;
+}
+
+.weather-ftabs {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.weather-ftab {
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+.weather-ftab.on {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+
+.weather-bars {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 11px;
+  padding: 5px 4px;
+  gap: 2px;
+}
+
+.weather-bar-col {
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 4px 2px;
+  box-shadow: none;
+}
+
+.weather-bar-col.next-day {
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.14);
+  border-radius: 0 8px 8px 0;
+}
+
+.weather-bar-col:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: transparent;
+  transform: none;
+}
+
+.weather-bar-col.on {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.weather-bar-col.next-day.on {
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.weather-daily-list {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 11px;
+  padding: 7px 10px;
+}
+
+.weather-advisory {
+  border-radius: 9px;
+  padding: 4.5px 9px;
+  font-weight: 500;
+}
+
+
+/* ── macOS / Apple Clean Polish: Clipboard & Calendar Task ───────────────── */
+
+.clip-shell {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.clip-search {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.08);
+  font-weight: 400;
+}
+
+.clip-search:focus {
+  border-color: rgba(125, 211, 252, 0.45);
+  background: rgba(255, 255, 255, 0.085);
+}
+
+.clip-filters {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.clip-ftab {
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+.clip-ftab.on {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+
+.clip-pause-btn,
+.clip-clear-btn {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.075);
+  font-weight: 500;
+}
+
+.clip-item {
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 9px;
+}
+
+.clip-item:hover,
+.clip-item.selected {
+  background: rgba(255, 255, 255, 0.085);
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+.clip-item.pinned {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.clip-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.clip-kind-badge.secret {
+  color: #fbbf24;
+}
+
+.clip-kind-badge.link {
+  color: #7dd3fc;
+}
+
+.clip-kind-badge.pin {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Agenda & Calendar macOS Polish */
+
+.agenda-cal,
+.agenda-tasks {
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.agenda-month-btn {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.agenda-day {
+  border-radius: 7px;
+  font-weight: 400;
+}
+
+.agenda-day.today {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.agenda-day.selected {
+  background: rgba(56, 189, 248, 0.24);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.45);
+}
+
+.agenda-day-title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.agenda-day-badge {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-weight: 500;
+}
+
+.agenda-item {
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.025);
+  padding: 5px 7px;
+}
+
+.agenda-item:hover {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.agenda-check {
+  border-radius: 50%;
+  border-width: 1.5px;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.agenda-check.on {
+  background: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.agenda-form {
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.agenda-repeat-seg {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.07);
+  border-radius: 7px;
+}
+
+.agenda-seg-btn.on {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+
+.agenda-time-pill {
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.075);
+}
+
+.agenda-add-btn {
+  border-radius: 7px;
+}
+
+
+/* ── Weather Spacious Proportions ────────────────────────────────────────── */
+
+.view.weather {
+  padding: 0 14px 12px 92px;
+}
+
+.weather-body {
+  grid-template-columns: 218px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.weather-hero {
+  justify-content: flex-start;
+  gap: 7px;
+}
+
+.weather-scene-card {
+  height: 86px;
+}
+
+
+/* ── Weather Clean Edge (Remove Patchy Edge Glow / Light Leak) ───────────── */
+
+.weather-shell,
+.weather-shell[data-mood="clear-day"],
+.weather-shell[data-mood="clear-night"],
+.weather-shell[data-mood="storm"],
+.weather-shell[data-mood="rain"],
+.weather-shell[data-mood="drizzle"],
+.weather-shell[data-mood="snow"] {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  box-shadow: none;
+}
+
+.weather-scene-overlay {
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.28) 0%, rgba(15, 23, 42, 0.1) 65%, rgba(15, 23, 42, 0.04) 100%);
 }

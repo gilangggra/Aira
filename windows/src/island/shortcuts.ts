@@ -165,9 +165,7 @@ export function runIslandKey(host: ShortcutHost, action: IslandKeyAction) {
     case "newChat":
       // Not while an answer is on its way: it would land in the new chat.
       if (State.stateOverride === "thinking") return;
-      State.chatHistory = [];
-      State.droppedFile = null;
-      State.promptContext = null;
+      State.startNewChatSession();
       void Bridge.chatReset();
       Sound.play("blip");
       host.setView("prompt");

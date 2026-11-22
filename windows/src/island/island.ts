@@ -7,7 +7,7 @@ import {
   CLOSED_BOT_D, CLOSED_H, closedContent, closedIsland, closedWidth, type ClosedContent,
 } from "../core/closed";
 import {
-  EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
+  CHAT_OVERLAY_H, EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
   islandSize,
   QUESTION_PICKER_H,
@@ -33,6 +33,7 @@ import { language, t, tl } from "../i18n/i18n";
 import { claudeCompactPillVisible, closePlanCard, openPlanColor, planCardOpen } from "../views/usage";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
 import { h } from "../views/dom";
+import { buildMiniWeatherIcon } from "../views/weather-art";
 import { buildSessionDropList, type SessionDropList } from "../views/session-drop";
 import { DROP_TEXT_RIGHT_WITH_LIST, dropTargetAt, dropTargets } from "../core/launch";
 import { IslandStateMachine } from "./fsm";
@@ -100,8 +101,10 @@ export class Island {
   private compactAgenda!: HTMLElement;
   private compactAgendaLabel!: HTMLElement;
   private compactWeather!: HTMLElement;
+  private compactWeatherIcon!: HTMLElement;
   private compactWeatherLabel!: HTMLElement;
   private compactWeatherDot!: HTMLElement;
+  private compactWeatherIconKey = "";
   private compactAiradoro!: HTMLElement;
   private compactAiradoroLabel!: HTMLElement;
   private compactAiradoroTimer: number | null = null;
@@ -408,6 +411,7 @@ export class Island {
       h("i", { class: "compact-agenda-dot" }),
       this.compactAgendaLabel,
     );
+    this.compactWeatherIcon = h("span", { class: "compact-weather-ico" });
     this.compactWeatherLabel = h("span", { class: "compact-weather-label" });
     this.compactWeatherDot = h("i", { class: "compact-weather-dot" });
     this.compactWeather = h(
@@ -424,6 +428,7 @@ export class Island {
           if (me.button === 0) this.openWeather();
         },
       },
+      this.compactWeatherIcon,
       this.compactWeatherLabel,
       this.compactWeatherDot,
     );
@@ -887,9 +892,9 @@ export class Island {
    */
   private swallow(path: string) {
     const name = path.split(/[\\/]/).pop() || "file";
+    State.startNewChatSession();
     State.droppedFile = { name, path };
     State.promptContext = { kind: "file", name, path };
-    State.chatHistory = [];
     void Bridge.chatReset();
 
     UploadSeq.performDrop(State.uploadDuration);
@@ -980,6 +985,8 @@ export class Island {
     let { w, h } = islandSize(State.mode, State.view, State.chatHistory.length);
     if (State.mode === "expanded" && State.view === "question" && State.pendingApproval?.questions) {
       h = QUESTION_PICKER_H;
+    } else if (State.mode === "expanded" && State.view === "prompt" && State.chatOverlay !== "none") {
+      h = Math.max(h, CHAT_OVERLAY_H);
     }
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };
@@ -1738,16 +1745,22 @@ export class Island {
         this.compactWeatherDot.style.boxShadow = `0 0 5px ${aqi.color}`;
       }
 
+      const iconKey = `${cond.kind}:${snap.isDay ? "1" : "0"}`;
+      if (this.compactWeatherIconKey !== iconKey) {
+        this.compactWeatherIconKey = iconKey;
+        this.compactWeatherIcon.replaceChildren(buildMiniWeatherIcon(cond.kind, snap.isDay, 12));
+      }
+
       const tempStr = formatTemp(snap.tempC, Weather.unit);
       this.compactWeatherLabel.textContent = rainAlert && rainSoon
-        ? `${cond.emoji} ${tempStr} · 💧${rainSoon.precipProb}%`
-        : `${cond.emoji} ${tempStr}`;
+        ? `${tempStr} · ${rainSoon.precipProb}%`
+        : tempStr;
 
       const tipParts = [
         `${snap.city} · ${t(cond.label)}`,
         `${t("Feels like")} ${formatTemp(snap.feelsLikeC, Weather.unit)}`,
       ];
-      if (rainSoon) tipParts.push(`💧${rainSoon.precipProb}% (${rainSoon.hour})`);
+      if (rainSoon) tipParts.push(`${t("Rain chance")} ${rainSoon.precipProb}% (${rainSoon.hour})`);
       if (aqi && snap.usAqi != null) tipParts.push(`AQI ${snap.usAqi}`);
       this.compactWeather.title = tipParts.join(" · ");
     } else {
@@ -1826,6 +1839,7 @@ export class Island {
   }
 
   get chatHeight() {
-    return chatPromptHeight(State.chatHistory.length);
+    const base = chatPromptHeight(State.chatHistory.length);
+    return State.chatOverlay !== "none" ? Math.max(base, CHAT_OVERLAY_H) : base;
   }
 }

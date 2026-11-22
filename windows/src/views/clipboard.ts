@@ -30,6 +30,29 @@ function makePinSvg(): SVGSVGElement {
   return el;
 }
 
+function makeLockSvg(): SVGSVGElement {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  el.setAttribute("viewBox", "0 0 16 16");
+  el.setAttribute("width", "11");
+  el.setAttribute("height", "11");
+  el.setAttribute("fill", "none");
+  el.innerHTML =
+    `<rect x="3.5" y="7" width="9" height="6.5" rx="1.6" stroke="currentColor" stroke-width="1.35"/>` +
+    `<path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>`;
+  return el;
+}
+
+function makeLinkSvg(): SVGSVGElement {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  el.setAttribute("viewBox", "0 0 16 16");
+  el.setAttribute("width", "11");
+  el.setAttribute("height", "11");
+  el.setAttribute("fill", "none");
+  el.innerHTML =
+    `<path d="M6.5 9.5 9.5 6.5M5.2 7.2 4 8.4a2.4 2.4 0 0 0 3.4 3.4l1.2-1.2M10.8 8.8 12 7.6A2.4 2.4 0 0 0 8.6 4.2L7.4 5.4" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/>`;
+  return el;
+}
+
 export function buildClipboardView(actions: ViewActions): ViewHost {
   let query = "";
   let filter: ClipboardFilter = "all";
@@ -193,15 +216,15 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
     const lines = entry.kind === "code" ? countClipboardLines(entry.text) : 1;
 
     const badge = isMasked
-      ? h("span", { class: "clip-kind-badge secret", title: tl("Sensitive"), text: "🔒" })
+      ? h("span", { class: "clip-kind-badge secret", title: tl("Sensitive") }, makeLockSvg())
       : entry.kind === "color"
         ? h("span", { class: "clip-swatch", style: `background:${entry.text.trim()}` })
         : entry.kind === "link"
-          ? h("span", { class: "clip-kind-badge link", text: "🔗" })
+          ? h("span", { class: "clip-kind-badge link" }, makeLinkSvg())
           : entry.kind === "code"
             ? h("span", { class: "clip-kind-badge code", text: "</>" })
             : entry.pinned
-              ? h("span", { class: "clip-kind-badge pin", text: "📌" })
+              ? h("span", { class: "clip-kind-badge pin" }, makePinSvg())
               : null;
 
     const sizeMeta = entry.kind === "code" && lines > 1

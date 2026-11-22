@@ -620,6 +620,11 @@ fn chat_reset(chat: State<Chat>) {
     chat.reset();
 }
 
+#[tauri::command]
+fn chat_restore(chat: State<Chat>, turns: Vec<(String, String)>) {
+    chat.restore(turns);
+}
+
 /// Copies a dropped file into the inbox and reports its name back.
 #[tauri::command]
 fn ingest_file(path: String) -> Result<DroppedFile, String> {
@@ -979,6 +984,7 @@ pub fn run() {
             local_connect,
             local_set_key,
             chat_reset,
+            chat_restore,
             ingest_file,
             secret_present,
             claude_ready,

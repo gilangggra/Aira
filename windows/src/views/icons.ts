@@ -95,4 +95,12 @@ export const ICONS = {
   cloudSun: "M12 3v1.8M5.6 5.6l1.3 1.3M3 12h1.8M17.1 6.9l1.3-1.3M8.5 12a3.5 3.5 0 0 1 6.7-1.4M8 19.5h8.2a3.3 3.3 0 0 0 .5-6.56 4.5 4.5 0 0 0-8.66-1.1A3.4 3.4 0 0 0 8 19.5z",
   // clipboard (stroked)
   clipboard: "M9 4.5h6a1.5 1.5 0 0 1 1.5 1.5v.5H18a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 18 20.5H6A1.5 1.5 0 0 1 4.5 19V8A1.5 1.5 0 0 1 6 6.5h1.5V6A1.5 1.5 0 0 1 9 4.5zm0 2v1h6v-1H9z",
+  // clock.arrow.circlepath (stroked) — Chat History
+  history: "M12 4.5a7.5 7.5 0 1 1-6.7 4.15M4.5 5v4h4M12 8.2V12l2.8 1.7",
+  // trash (stroked)
+  trash: "M4.5 6.5h15M9.5 4h5M7 6.5l.8 12.2a1.5 1.5 0 0 0 1.5 1.3h5.4a1.5 1.5 0 0 0 1.5-1.3L17 6.5M10 10.5v5.5M14 10.5v5.5",
+  // square.and.pencil (stroked) — New Chat
+  newChat: "M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13M18.2 3.8a1.8 1.8 0 0 1 2.55 2.55L12 15.1l-3.4.85.85-3.4L18.2 3.8z",
+  // envelope (stroked) — Mail toggle
+  envelope: "M4 6.5h16a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 16V8A1.5 1.5 0 0 1 4 6.5zm0 1.5 8 5.2L20 8",
 } as const;

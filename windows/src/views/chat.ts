@@ -22,6 +22,11 @@ import { N_, t, tl } from "../i18n/i18n";
 import { HOST_OS } from "../core/pills";
 import { MailChat, splitPlan } from "../core/mail";
 import { mailPlanCard } from "./mailplan";
+import {
+  formatSessionTime,
+  groupChatSessions,
+  type ChatSession,
+} from "../core/chat-sessions";
 
 const STRINGS = {
   placeholderFirst: N_("Ask me anything…"),
@@ -32,15 +37,44 @@ const STRINGS = {
   loading: N_("Loading models…"),
   noKey: N_("No API key — add it in Settings."),
   openSettings: N_("Open Settings"),
+  history: N_("History"),
+  newChat: N_("New Chat"),
+  newShort: N_("New"),
+  clearChat: N_("Delete current conversation"),
+  clearAll: N_("Clear All"),
+  conversations: N_("Conversations"),
+  noHistory: N_("No previous conversations"),
+  deleteConversation: N_("Delete conversation"),
+  msgs: N_("msgs"),
+  removeAttachment: N_("Remove attachment"),
 };
 
 let nextId = 1;
 
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0 || dot === name.length - 1) return "";
+  return name.slice(dot + 1, dot + 6).toUpperCase();
+}
+
 function bubble(message: ChatMessage): HTMLElement {
   if (message.role === "user") {
+    const attachmentCard = message.attachment
+      ? (() => {
+          const ext = fileExtension(message.attachment.name);
+          return h(
+            "div",
+            { class: "bubble-attachment", title: message.attachment.name },
+            h("span", { class: "bubble-attachment-ico" }, svg(ICONS.doc, 13)),
+            h("span", { class: "bubble-attachment-name", text: message.attachment.name }),
+            ext ? h("span", { class: "bubble-attachment-ext", text: ext }) : null,
+          );
+        })()
+      : null;
     return h(
       "div",
       { class: "chat-row user" },
+      attachmentCard,
       h("div", { class: "bubble", text: message.content }),
     );
   }
@@ -61,8 +95,24 @@ function typingDots(): HTMLElement {
 }
 
 /** The coloured chip showing what the question is about (a dropped file). */
-function contextChip(label: string): HTMLElement {
-  const chip = h("div", { class: "chip" }, h("i", { class: "chip-dot" }), h("span", { text: label }));
+function contextChip(label: string, onRemove?: () => void): HTMLElement {
+  const dot = h("i", { class: "chip-dot" });
+  const text = h("span", { class: "chip-label", text: label });
+  const closeBtn = onRemove
+    ? h(
+        "button",
+        {
+          class: "chip-close",
+          title: tl(STRINGS.removeAttachment),
+          onclick: (e: Event) => {
+            e.stopPropagation();
+            onRemove();
+          },
+        },
+        svg(ICONS.xmark, 7, { stroke: 2 }),
+      )
+    : null;
+  const chip = h("div", { class: "chip" }, dot, text, closeBtn);
   requestAnimationFrame(() => chip.classList.add("settled"));
   return chip;
 }
@@ -218,9 +268,165 @@ function buildPicker(onChange: () => void): Picker {
   };
 }
 
+// ── History panel ─────────────────────────────────────────────────────────────
+
+interface HistoryPanel {
+  el: HTMLElement;
+  open(): void;
+  close(): void;
+  render(): void;
+  readonly isOpen: boolean;
+}
+
+function buildHistoryPanel(
+  onSelect: (id: string) => void,
+  onDelete: (id: string) => void,
+  onClearAll: () => void,
+  onToggle: () => void,
+): HistoryPanel {
+  const clearAllBtn = h("button", {
+    class: "chat-history-clear",
+    text: t(STRINGS.clearAll),
+    onclick: () => onClearAll(),
+  });
+  const closeBtn = h(
+    "button",
+    {
+      class: "chat-history-close",
+      title: tl("Close"),
+      onclick: () => close(),
+    },
+    svg(ICONS.xmark, 10),
+  );
+  const header = h(
+    "div",
+    { class: "chat-history-header" },
+    h("span", { class: "chat-history-heading", text: t(STRINGS.conversations) }),
+    h("div", { class: "chat-history-actions" }, clearAllBtn, closeBtn),
+  );
+  const list = h("div", { class: "chat-history-list" });
+  const el = h("div", { class: "chat-history-panel" }, header, list);
+
+  let isOpen = false;
+
+  function renderItem(s: ChatSession): HTMLElement {
+    const active = s.id === State.activeChatSessionId;
+    const delBtn = h(
+      "button",
+      {
+        class: "chat-history-del",
+        title: tl(STRINGS.deleteConversation),
+        onclick: (e: Event) => {
+          e.stopPropagation();
+          onDelete(s.id);
+        },
+      },
+      svg(ICONS.trash, 11, { stroke: 1.8 }),
+    );
+    const meta = `${s.messages.length} ${t(STRINGS.msgs)} · ${formatSessionTime(s.updatedAt)}`;
+    return h(
+      "div",
+      {
+        class: active ? "chat-history-item active" : "chat-history-item",
+        role: "button",
+        tabindex: "0",
+        onclick: () => onSelect(s.id),
+      },
+      h("i", { class: "chat-history-dot" }),
+      h(
+        "div",
+        { class: "chat-history-text" },
+        h("div", { class: "chat-history-title", text: s.title }),
+        h("div", { class: "chat-history-meta", text: meta }),
+      ),
+      delBtn,
+    );
+  }
+
+  function render() {
+    clear(list);
+    const sessions = State.chatSessions;
+    clearAllBtn.style.display = sessions.length > 0 ? "" : "none";
+    if (sessions.length === 0) {
+      list.append(
+        h(
+          "div",
+          { class: "chat-history-empty" },
+          svg(ICONS.bubbleRound, 18),
+          h("span", { text: t(STRINGS.noHistory) }),
+        ),
+      );
+      return;
+    }
+    for (const group of groupChatSessions(sessions)) {
+      list.append(h("div", { class: "chat-history-group", text: t(group.key) }));
+      for (const item of group.items) list.append(renderItem(item));
+    }
+  }
+
+  function open() {
+    isOpen = true;
+    el.classList.add("on");
+    render();
+    onToggle();
+  }
+
+  function close() {
+    if (!isOpen) return;
+    isOpen = false;
+    el.classList.remove("on");
+    onToggle();
+  }
+
+  return {
+    el,
+    open,
+    close,
+    render,
+    get isOpen() {
+      return isOpen;
+    },
+  };
+}
+
 // ── View ──────────────────────────────────────────────────────────────────────
 
 export function buildPrompt(onHeightChange: () => void): ViewHost {
+  // Keep nextId above any restored session message IDs to avoid duplicate keys.
+  for (const m of State.chatHistory) {
+    if (m.id >= nextId) nextId = m.id + 1;
+  }
+  if (State.chatHistory.length > 0) {
+    void Bridge.chatRestore(State.chatHistory.map((m) => [m.role, m.content]));
+  }
+
+  const historyBadge = h("span", { class: "chat-tool-badge" });
+  const historyBtn = h(
+    "button",
+    { class: "chat-tool-btn", title: tl(STRINGS.history) },
+    svg(ICONS.history, 12, { stroke: 1.8 }),
+    h("span", { text: t(STRINGS.history) }),
+    historyBadge,
+  ) as HTMLButtonElement;
+  const sessionTitleEl = h("span", { class: "chat-session-title" });
+  const newChatBtn = h(
+    "button",
+    { class: "chat-tool-btn", title: tl(STRINGS.newChat) },
+    svg(ICONS.newChat, 12, { stroke: 1.8 }),
+    h("span", { text: t(STRINGS.newShort) }),
+  ) as HTMLButtonElement;
+  const deleteChatBtn = h(
+    "button",
+    { class: "chat-tool-btn danger", title: tl(STRINGS.clearChat) },
+    svg(ICONS.trash, 12, { stroke: 1.8 }),
+  ) as HTMLButtonElement;
+  const toolbar = h(
+    "div",
+    { class: "chat-toolbar" },
+    h("div", { class: "chat-toolbar-left" }, historyBtn, sessionTitleEl),
+    h("div", { class: "chat-toolbar-right" }, newChatBtn, deleteChatBtn),
+  );
+
   const chipRow = h("div", { class: "chip-row" });
   const log = h("div", { class: "chat-log" });
   const input = h("input", {
@@ -244,7 +450,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   // The Mail switch (classic Outlook, Windows): on, the AI sees the latest messages and may
   // prepare actions on them, which run only after a click on the plan's card.
   const mailBtn = h("button", { class: "mail-toggle", title: tl("Lets the AI see your latest messages and prepare actions on them. Nothing happens until you click Run.") },
-    h("span", { text: "✉" }), h("span", { text: tl("Mail") }));
+    svg(ICONS.envelope, 12, { stroke: 1.8 }), h("span", { text: tl("Mail") }));
   mailBtn.addEventListener("click", () => {
     MailChat.on = !MailChat.on;
     mailBtn.classList.toggle("on", MailChat.on);
@@ -253,11 +459,68 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   if (HOST_OS === "windows") modelRow.prepend(mailBtn);
 
   const body = h("div", { class: "chat-body" });
+  function syncOverlayHeight() {
+    const nextOverlay = picker.isOpen ? "picker" : historyPanel.isOpen ? "history" : "none";
+    if (State.chatOverlay !== nextOverlay) {
+      State.chatOverlay = nextOverlay;
+      onHeightChange();
+    }
+  }
   const picker = buildPicker(() => {
     body.classList.toggle("picking", picker.isOpen);
+    if (picker.isOpen && historyPanel.isOpen) historyPanel.close();
     drawModelButton();
+    syncOverlayHeight();
   });
-  body.append(chipRow, log, picker.el, modelRow, bar);
+  const historyPanel = buildHistoryPanel(
+    (id) => {
+      if (sending) return;
+      const msgs = State.selectChatSession(id);
+      if (msgs) {
+        for (const m of msgs) {
+          if (m.id >= nextId) nextId = m.id + 1;
+        }
+        void Bridge.chatRestore(msgs.map((m) => [m.role, m.content]));
+      }
+      historyPanel.close();
+      renderedCount = -1;
+      Sound.play("blip");
+      State.notify();
+      onHeightChange();
+      input.focus();
+    },
+    (id) => {
+      const wasActive = State.activeChatSessionId === id;
+      State.deleteChatSessionById(id);
+      if (wasActive) {
+        void Bridge.chatReset();
+        renderedCount = -1;
+      }
+      Sound.play("pop");
+      historyPanel.render();
+      drawToolbar();
+      State.notify();
+      onHeightChange();
+    },
+    () => {
+      State.clearAllChatSessions();
+      void Bridge.chatReset();
+      renderedCount = -1;
+      Sound.play("pop");
+      historyPanel.render();
+      drawToolbar();
+      State.notify();
+      onHeightChange();
+    },
+    () => {
+      body.classList.toggle("history-open", historyPanel.isOpen);
+      if (historyPanel.isOpen && picker.isOpen) picker.close();
+      drawToolbar();
+      syncOverlayHeight();
+    },
+  );
+
+  body.append(toolbar, chipRow, log, picker.el, historyPanel.el, modelRow, bar);
   void loadSubscriptions().then(() => drawModelButton());
 
   const el = h("div", { class: "view" }, h("div", { class: "card wash chat-card" }, body));
@@ -267,6 +530,60 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   let renderedCount = -1;
   // A local model answers token by token: where its text so far is shown.
   let live: HTMLElement | null = null;
+
+  function drawToolbar() {
+    const count = State.chatSessions.length;
+    historyBadge.textContent = count > 0 ? String(count) : "";
+    historyBadge.style.display = count > 0 ? "" : "none";
+    historyBtn.classList.toggle("on", historyPanel.isOpen);
+    historyBtn.disabled = sending;
+
+    const active = State.activeChatSessionId
+      ? State.chatSessions.find((s) => s.id === State.activeChatSessionId)
+      : undefined;
+    sessionTitleEl.textContent = active ? active.title : "";
+    sessionTitleEl.style.display = active && !historyPanel.isOpen ? "" : "none";
+
+    const hasMsgs = State.chatHistory.length > 0;
+    newChatBtn.disabled = sending || (!hasMsgs && !State.activeChatSessionId);
+    deleteChatBtn.disabled = sending || !hasMsgs;
+    deleteChatBtn.style.display = hasMsgs ? "" : "none";
+  }
+
+  function startNewChat() {
+    if (sending) return;
+    State.startNewChatSession();
+    void Bridge.chatReset();
+    if (historyPanel.isOpen) historyPanel.close();
+    renderedCount = -1;
+    Sound.play("blip");
+    drawToolbar();
+    State.notify();
+    onHeightChange();
+    input.focus();
+  }
+
+  function deleteCurrentChat() {
+    if (sending || State.chatHistory.length === 0) return;
+    if (State.activeChatSessionId) State.deleteChatSessionById(State.activeChatSessionId);
+    else State.startNewChatSession();
+    void Bridge.chatReset();
+    renderedCount = -1;
+    Sound.play("pop");
+    drawToolbar();
+    if (historyPanel.isOpen) historyPanel.render();
+    State.notify();
+    onHeightChange();
+    input.focus();
+  }
+
+  historyBtn.addEventListener("click", () => {
+    if (sending) return;
+    if (historyPanel.isOpen) historyPanel.close();
+    else historyPanel.open();
+  });
+  newChatBtn.addEventListener("click", () => startNewChat());
+  deleteChatBtn.addEventListener("click", () => deleteCurrentChat());
 
   function drawModelButton() {
     const p = providerDef(State.settings.chatProvider);
@@ -297,25 +614,28 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     const query = input.value.trim();
     if (!query || sending) return;
     if (picker.isOpen) picker.close();
+    if (historyPanel.isOpen) historyPanel.close();
     input.value = "";
     sending = true;
     drawModelButton();
+    drawToolbar();
     Sound.play("send");
-
-    State.chatHistory.push({ id: nextId++, role: "user", content: query });
 
     const agendaCmd = parseAgendaCommand(query, new Date());
     if (agendaCmd) {
+      State.chatHistory.push({ id: nextId++, role: "user", content: query });
       addAgendaTask(loadAgendaTasks(), agendaCmd.date, agendaCmd.title, agendaCmd.time);
       const when = agendaCmd.time ? `${agendaCmd.date} · ${agendaCmd.time}` : agendaCmd.date;
       State.chatHistory.push({
         id: nextId++,
         role: "assistant",
-        content: `✓ ${t("Added")}: **${agendaCmd.title}** (${when})`,
+        content: `${t("Added")}: **${agendaCmd.title}** (${when})`,
       });
+      State.saveCurrentChatSession();
       Sound.play("finish");
       sending = false;
       drawModelButton();
+      drawToolbar();
       State.notify();
       onHeightChange();
       input.disabled = false;
@@ -323,17 +643,33 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       return;
     }
 
+    const file = State.droppedFile;
+    const attachToTurn = State.chatHistory.length === 0 && Boolean(file);
+    State.chatHistory.push({
+      id: nextId++,
+      role: "user",
+      content: query,
+      ...(attachToTurn && file ? { attachment: { name: file.name, path: file.path } } : {}),
+    });
+    State.saveCurrentChatSession();
+
+    const context: ChatContext | null =
+      attachToTurn && file ? { kind: "file", name: file.name, path: file.path } : null;
+
+    if (file) {
+      State.clearDroppedFile();
+      chipRow.dataset.label = "";
+      clear(chipRow);
+    }
+
     State.stateOverride = "thinking";
     State.notify();
     onHeightChange();
 
-    const file = State.droppedFile;
-    const context: ChatContext | null =
-      State.chatHistory.length === 1 && file ? { kind: "file", name: file.name, path: file.path } : null;
-
     try {
       const reply = await Bridge.chatSend(query, context, MailChat.on && HOST_OS === "windows");
       State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
+      State.saveCurrentChatSession();
       State.stateOverride = null;
       Sound.play("finish");
     } catch (err) {
@@ -346,6 +682,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       live = null;
       renderedCount = -1; // the finished answer replaces the streamed one
       drawModelButton();
+      drawToolbar();
       State.notify();
       onHeightChange();
       // Back to typing without a click. The field was disabled while the
@@ -367,6 +704,9 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     } else if (key === "Escape" && picker.isOpen) {
       e.preventDefault();
       picker.close();
+    } else if (key === "Escape" && historyPanel.isOpen) {
+      e.preventDefault();
+      historyPanel.close();
     }
     e.stopPropagation(); // Escape closes the island, not the chat
   });
@@ -379,7 +719,18 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       if (chipRow.dataset.label !== wantChip) {
         chipRow.dataset.label = wantChip;
         clear(chipRow);
-        if (wantChip) chipRow.append(contextChip(wantChip));
+        if (wantChip) {
+          chipRow.append(
+            contextChip(wantChip, () => {
+              State.clearDroppedFile();
+              chipRow.dataset.label = "";
+              clear(chipRow);
+              Sound.play("pop");
+              State.notify();
+              onHeightChange();
+            }),
+          );
+        }
       }
 
       const thinking = State.stateOverride === "thinking";
@@ -392,9 +743,13 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         log.scrollTop = log.scrollHeight;
       }
 
-      // Leaving the chat folds the picker away.
-      if (State.view !== "prompt" && picker.isOpen) picker.close();
+      // Leaving the chat folds the picker and history drawer away.
+      if (State.view !== "prompt") {
+        if (picker.isOpen) picker.close();
+        if (historyPanel.isOpen) historyPanel.close();
+      }
       drawModelButton();
+      drawToolbar();
 
       input.placeholder = t(State.chatHistory.length === 0 ? STRINGS.placeholderFirst : STRINGS.placeholderNext);
       input.disabled = sending;
