@@ -7,6 +7,7 @@ import { emitTo, listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { Settings } from "./state";
 import type { RecapHistory, RecapPrefs } from "../recap/summary";
+import type { LyricsPayload } from "./lyrics";
 import type { SpotifyState } from "./spotify";
 import type { UpdateStatus } from "./update";
 import type { WeatherLocation, WeatherSnapshot } from "./weather";
@@ -491,6 +492,9 @@ export const Bridge = {
   spotifyOpen: () => call<boolean>("spotify_open"),
   /** Whether there is a Spotify to launch (Settings). */
   spotifyInstalled: () => call<boolean>("spotify_installed"),
+  /** Fetches synced / plain lyrics for a track via LRCLIB (cached in Rust). */
+  spotifyLyrics: (title: string, artist: string, album: string, duration: number) =>
+    call<LyricsPayload | null>("spotify_lyrics", { title, artist, album, duration }),
 
   // ── WhatsApp (src-tauri/src/whatsapp) ─────────────────────────────────────
   /** The island's copy, asked once at start (then the "whatsapp" event). Island only. */

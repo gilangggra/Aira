@@ -15,17 +15,18 @@ import {
 } from "../core/layout";
 import { Sound } from "../core/sound";
 import { State } from "../core/state";
-import { SPOTIFY_ID, Spotify, islandDances } from "../core/spotify";
+import { SPOTIFY_ID, Spotify, currentArtwork, isAd, islandDances, spotifyPosition } from "../core/spotify";
+import { SpotifyLyrics, activeLyricLine } from "../core/lyrics";
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
-import { createMiniBot, pruneMiniBots, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
+import { syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
 import { SeasonCache, parseOutfit } from "../mochi/wardrobe";
 import { UploadCanvas } from "../upload/canvas";
 import { USC, UploadSeq, uploadProgressCurve } from "../upload/sequence";
 import { dominantPct, planColor } from "../core/plan";
 import { dueAgendaReminders, loadAgendaTasks, markReminderNotified, pendingCountForDate, tasksForDay } from "../core/agenda";
 import { dayKey } from "../core/calendar";
-import { Weather, WEATHER_TTL_SEC, aqiInfo, formatTemp, upcomingRainPeak, wmoCondition } from "../core/weather";
+import { Weather, WEATHER_TTL_SEC, resolveDayPhase, wmoCondition } from "../core/weather";
 import { Clipboard } from "../core/clipboard";
 import { AIRADORO_ID, AiradoroEngine } from "../core/airadoro";
 import { Airadoro } from "./airadoro";
@@ -33,7 +34,6 @@ import { language, t, tl } from "../i18n/i18n";
 import { claudeCompactPillVisible, closePlanCard, openPlanColor, planCardOpen } from "../views/usage";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
 import { h } from "../views/dom";
-import { buildMiniWeatherIcon } from "../views/weather-art";
 import { buildSessionDropList, type SessionDropList } from "../views/session-drop";
 import { DROP_TEXT_RIGHT_WITH_LIST, dropTargetAt, dropTargets } from "../core/launch";
 import { IslandStateMachine } from "./fsm";
@@ -110,7 +110,6 @@ export class Island {
   private compactWeatherIcon!: HTMLElement;
   private compactWeatherLabel!: HTMLElement;
   private compactWeatherDot!: HTMLElement;
-  private compactWeatherIconKey = "";
   private compactAiradoro!: HTMLElement;
   private compactAiradoroLabel!: HTMLElement;
   private compactAiradoroTimer: number | null = null;
@@ -118,7 +117,13 @@ export class Island {
   private compactGridH = 16;
   private compactTargetW = COMPACT_W;
   private compactTargetH = 34;
+  private compactLyric!: HTMLElement;
+  private compactLyricText!: HTMLElement;
+  private compactLyricTimer: number | null = null;
   private wakeStrip!: HTMLElement;
+  private musicBackdrop!: HTMLElement;
+  private musicBackdropImg!: HTMLImageElement;
+  private weatherBackdrop!: HTMLElement;
 
   private header!: ViewHost & { dockEl?: HTMLElement };
   private views!: Map<IslandViewName, ViewHost>;
@@ -464,6 +469,28 @@ export class Island {
       h("i", { class: "compact-airadoro-dot" }),
       this.compactAiradoroLabel,
     );
+    this.compactLyricText = h("span", { class: "compact-lyric-text" });
+    this.compactLyric = h(
+      "button",
+      {
+        id: "compact-lyric",
+        title: tl("Lyrics"),
+        onmousedown: (e) => {
+          e.stopPropagation();
+        },
+        onclick: (e) => {
+          e.stopPropagation();
+          const me = e as MouseEvent;
+          if (me.button === 0) {
+            Sound.play("click");
+            State.setFocus(SPOTIFY_ID);
+            this.expand("music");
+          }
+        },
+      },
+      h("i", { class: "compact-lyric-note", text: "♪" }),
+      this.compactLyricText,
+    );
 
     this.header = buildHeader(actions);
     this.views = buildViews(actions, () => this.animateGeometry(false));
@@ -485,9 +512,21 @@ export class Island {
     this.sessionDrop = buildSessionDropList();
     this.uploadCanvas.el.append(this.sessionDrop.el);
 
+    this.musicBackdropImg = h("img", { class: "music-backdrop-art", alt: "", draggable: "false" }) as HTMLImageElement;
+    this.musicBackdrop = h(
+      "div",
+      { class: "music-backdrop" },
+      this.musicBackdropImg,
+      h("div", { class: "music-backdrop-fallback" }),
+      h("div", { class: "music-backdrop-vignette" }),
+    );
+    this.weatherBackdrop = h("div", { class: "weather-backdrop" });
+
     this.clipEl = h(
       "div",
       { id: "island-clip" },
+      this.musicBackdrop,
+      this.weatherBackdrop,
       this.greetingCanvas,
       this.uploadCanvas.el,
       this.contentEl,
@@ -503,6 +542,7 @@ export class Island {
       this.compactAgenda,
       this.compactWeather,
       this.compactAiradoro,
+      this.compactLyric,
       this.clockEl,
       this.closedEl,
       this.countdown,
@@ -990,13 +1030,21 @@ export class Island {
     return closedIsland(State.settings.closedIsland) !== "hidden";
   }
 
+  private currentSyncedLyric(): string | null {
+    const track = Spotify.state.track;
+    if (!State.spotifyPlaying || !track || isAd(track)) return null;
+    return activeLyricLine(SpotifyLyrics.current, spotifyPosition(Spotify.state, Date.now()));
+  }
+
   private applyCompactLayout() {
     const hover = this.wasInIsland && State.mode === "compact";
     const padX = hover ? 18 : 14;
     const gap = 7;
-    const otherCount = Math.min(4, State.otherTasks.length);
-    const hasWeather = Weather.snapshot != null;
-    const hasClock = State.settings.showClock;
+    const otherCount = 0; // Mini-grid (mochi on the right) hidden per user request
+    const hasWeather = false; // Weather pill on compact notch hidden per user request
+    const lyric = State.mode === "compact" ? this.currentSyncedLyric() : null;
+    const hasLyric = Boolean(lyric);
+    const hasClock = State.settings.showClock && !hasLyric;
     const hasAiradoro = Airadoro.snapshot.phase !== "idle";
     const pendingToday = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
     const hasAgenda = pendingToday > 0;
@@ -1006,7 +1054,7 @@ export class Island {
     const gridH = otherCount === 0 ? 0 : otherCount <= 2 ? 16 : 30;
     this.compactGridH = gridH;
 
-    // Left cluster: Mochi + Weather pill + optional Clock.
+    // Left cluster: Mochi + Weather pill + optional Clock / Lyrics.
     let leftCursor = padX;
     this.compactBotCx = leftCursor + 24;
     leftCursor = this.compactBotCx + 16;
@@ -1021,6 +1069,7 @@ export class Island {
     const agendaW = hasAgenda ? Math.max(30, Math.ceil(this.compactAgenda.offsetWidth || 34)) : 0;
     const planW = hasPlan ? Math.max(36, Math.ceil(this.compactPlan.offsetWidth || 42)) : 0;
     const clockW = hasClock ? Math.max(76, Math.ceil(this.clockEl.scrollWidth || 88)) : 0;
+    const lyricW = hasLyric ? Math.max(120, Math.min(200, Math.ceil(this.compactLyricText.scrollWidth + 24 || 150))) : 0;
 
     let rightNeeded = padX;
     if (gridW > 0) rightNeeded += gridW + gap;
@@ -1028,8 +1077,9 @@ export class Island {
     if (hasAgenda) rightNeeded += agendaW + gap;
     if (hasAiradoro) rightNeeded += airaW + gap;
 
-    const minNeededW = leftCursor + (hasClock ? clockW + gap * 2 : 0) + rightNeeded;
-    const baseW = Math.max(COMPACT_W, Math.round(minNeededW));
+    const centerNeeded = hasLyric ? lyricW + gap * 2 : hasClock ? clockW + gap * 2 : 0;
+    const minNeededW = leftCursor + centerNeeded + rightNeeded;
+    const baseW = Math.max(hasLyric ? 396 : COMPACT_W, Math.round(minNeededW));
     const w = hover ? baseW + 24 : baseW;
     const h = (otherCount >= 3 ? 38 : NOTCH_H) + (hover ? 2 : 0);
 
@@ -1058,7 +1108,10 @@ export class Island {
       rightEdge -= gap;
     }
 
-    if (hasClock) {
+    if (hasLyric) {
+      this.compactLyric.style.left = `${leftCursor}px`;
+      this.compactLyric.style.right = `${Math.max(padX, w - rightEdge)}px`;
+    } else if (hasClock) {
       const availCenter = Math.max(leftCursor, (w - clockW) / 2);
       const maxLeft = rightEdge - clockW;
       this.clockEl.style.left = `${Math.min(availCenter, Math.max(leftCursor, maxLeft))}px`;
@@ -1266,6 +1319,7 @@ export class Island {
         locale: language(),
         planUsage: State.planUsage,
         music: State.spotifyPlaying && track ? { title: track.title, artist: track.artist } : null,
+        lyric: this.currentSyncedLyric(),
       })
       : null;
     const key = content ? `${style}|${content.text}|${content.dot ?? ""}|${content.note}` : style;
@@ -1768,6 +1822,37 @@ export class Island {
 
     const live = expanded && !greetingActive;
     const showDock = live && !this.uploadActive && !DOCK_HIDDEN_VIEWS.has(State.view);
+    const musicHeroOn = live && State.view === "music" && !this.uploadActive && Spotify.state.track != null;
+    this.islandEl.dataset.music = musicHeroOn ? "on" : "off";
+    this.musicBackdrop.classList.toggle("on", musicHeroOn);
+    if (musicHeroOn) {
+      const cover = currentArtwork(Spotify.state);
+      if (cover) {
+        if (this.musicBackdropImg.getAttribute("src") !== cover) this.musicBackdropImg.setAttribute("src", cover);
+        this.musicBackdrop.classList.add("has-art");
+      } else {
+        this.musicBackdrop.classList.remove("has-art");
+        this.musicBackdropImg.removeAttribute("src");
+      }
+    }
+
+    const weatherHeroOn = live && State.view === "weather" && !this.uploadActive;
+    this.islandEl.dataset.weather = weatherHeroOn ? "on" : "off";
+    this.weatherBackdrop.classList.toggle("on", weatherHeroOn);
+    if (weatherHeroOn) {
+      const snap = Weather.snapshot;
+      if (snap) {
+        const cond = wmoCondition(snap.weatherCode, snap.isDay);
+        const phase = resolveDayPhase(snap.isDay, snap.daily[0]?.sunrise, snap.daily[0]?.sunset);
+        this.weatherBackdrop.dataset.mood = cond.kind === "clear" ? (snap.isDay ? "clear-day" : "clear-night") : cond.kind;
+        this.weatherBackdrop.dataset.phase = phase;
+      } else {
+        const hNow = new Date().getHours();
+        const isDayFallback = hNow >= 6 && hNow < 18;
+        this.weatherBackdrop.dataset.mood = isDayFallback ? "clear-day" : "clear-night";
+        this.weatherBackdrop.dataset.phase = resolveDayPhase(isDayFallback);
+      }
+    }
     this.islandEl.classList.toggle("has-dock", showDock);
     this.contentEl.style.opacity = live ? "1" : "0";
     // While the drop sequence owns the body its buttons are painted on the canvas
@@ -1807,21 +1892,10 @@ export class Island {
       }
     }
 
-    // Compact mini grid
-    const showGrid = State.mode === "compact";
-    this.miniGrid.style.opacity = showGrid ? "1" : "0";
-    if (showGrid) {
-      const others = State.otherTasks.slice(0, 4);
-      const key = others.map((t) => t.id).join("|");
-      if (this.miniGrid.dataset.key !== key) {
-        this.miniGrid.dataset.key = key;
-        this.miniGrid.replaceChildren();
-        for (const t of others) {
-          this.miniGrid.append(createMiniBot(t, 13));
-        }
-        pruneMiniBots();
-      }
-    }
+    // Compact mini grid: hidden per user request
+    this.miniGrid.style.opacity = "0";
+    this.miniGrid.style.display = "none";
+    this.miniGrid.style.pointerEvents = "none";
 
     // Compact Claude plan indicator
     const showPlan = claudeCompactPillVisible();
@@ -1871,48 +1945,13 @@ export class Island {
       this.compactAgendaLabel.textContent = String(pendingToday);
     }
 
-    // Compact live weather pill on the left next to Mochi
-    const snap = Weather.snapshot;
-    const showWeather = State.mode === "compact" && snap != null;
-    this.compactWeather.style.opacity = showWeather ? "1" : "0";
-    this.compactWeather.style.pointerEvents = showWeather ? "auto" : "none";
-    if (showWeather && snap) {
-      const cond = wmoCondition(snap.weatherCode, snap.isDay);
-      const isRainingNow = (snap.precipitationMm ?? 0) > 0 || cond.kind === "rain" || cond.kind === "drizzle" || cond.kind === "storm";
-      const rainSoon = upcomingRainPeak(snap, new Date(), 2);
-      const rainAlert = !isRainingNow && rainSoon != null && rainSoon.precipProb >= 55;
-      const aqi = aqiInfo(snap.usAqi);
-      const aqiAlert = aqi != null && snap.usAqi != null && snap.usAqi >= 101;
+    // Compact live weather pill: hidden per user request
+    this.compactWeather.style.opacity = "0";
+    this.compactWeather.style.display = "none";
+    this.compactWeather.style.pointerEvents = "none";
+    this.compactWeather.classList.remove("rain-alert", "has-aqi-dot");
 
-      this.compactWeather.classList.toggle("rain-alert", rainAlert);
-      this.compactWeather.classList.toggle("has-aqi-dot", aqiAlert);
-      if (aqiAlert && aqi) {
-        this.compactWeatherDot.style.background = aqi.color;
-        this.compactWeatherDot.style.boxShadow = `0 0 5px ${aqi.color}`;
-      }
-
-      const iconKey = `${cond.kind}:${snap.isDay ? "1" : "0"}`;
-      if (this.compactWeatherIconKey !== iconKey) {
-        this.compactWeatherIconKey = iconKey;
-        this.compactWeatherIcon.replaceChildren(buildMiniWeatherIcon(cond.kind, snap.isDay, 12));
-      }
-
-      const tempStr = formatTemp(snap.tempC, Weather.unit);
-      this.compactWeatherLabel.textContent = rainAlert && rainSoon
-        ? `${tempStr} · ${rainSoon.precipProb}%`
-        : tempStr;
-
-      const tipParts = [
-        `${snap.city} · ${t(cond.label)}`,
-        `${t("Feels like")} ${formatTemp(snap.feelsLikeC, Weather.unit)}`,
-      ];
-      if (rainSoon) tipParts.push(`${t("Rain chance")} ${rainSoon.precipProb}% (${rainSoon.hour})`);
-      if (aqi && snap.usAqi != null) tipParts.push(`AQI ${snap.usAqi}`);
-      this.compactWeather.title = tipParts.join(" · ");
-    } else {
-      this.compactWeather.classList.remove("rain-alert", "has-aqi-dot");
-    }
-
+    this.syncCompactLyric();
     this.updateClock();
     this.applyCompactLayout();
 
@@ -1929,10 +1968,57 @@ export class Island {
     this.engine.setState(State.effectiveState);
   }
 
+  private syncCompactLyric() {
+    const lyric = State.mode === "compact" ? this.currentSyncedLyric() : null;
+    const on = Boolean(lyric);
+    this.compactLyric.style.opacity = on ? "1" : "0";
+    this.compactLyric.style.pointerEvents = on ? "auto" : "none";
+    if (on && lyric && this.compactLyricText.textContent !== lyric) {
+      this.compactLyricText.textContent = lyric;
+    }
+
+    const needTick =
+      State.spotifyPlaying &&
+      Boolean(SpotifyLyrics.current?.synced) &&
+      (State.mode === "compact" ||
+        (State.mode === "hidden" && closedIsland(State.settings.closedIsland) === "music"));
+
+    if (needTick && this.compactLyricTimer == null) {
+      this.compactLyricTimer = window.setInterval(() => {
+        if (!State.spotifyPlaying || !SpotifyLyrics.current?.synced) {
+          if (this.compactLyricTimer != null) window.clearInterval(this.compactLyricTimer);
+          this.compactLyricTimer = null;
+          this.syncCompactLyric();
+          this.applyCompactLayout();
+          this.updateClosed();
+          return;
+        }
+        if (State.mode === "compact") {
+          const prev = this.compactLyricText.textContent || "";
+          const cur = this.currentSyncedLyric() || "";
+          if (prev !== cur) {
+            this.syncCompactLyric();
+            this.applyCompactLayout();
+            const sz = this.targetSize();
+            if (Math.abs(sz.w - this.width.target) > 0.5) {
+              this.animateGeometry(sz.w < this.width.target);
+            }
+          }
+        } else if (State.mode === "hidden") {
+          this.updateClosed();
+        }
+      }, 250);
+    } else if (!needTick && this.compactLyricTimer != null) {
+      window.clearInterval(this.compactLyricTimer);
+      this.compactLyricTimer = null;
+    }
+  }
+
   /** The clock sits in the middle of the compact island, where the notch is on a Mac. */
   private updateClock() {
     this.updateClosed();
-    const on = State.mode === "compact" && State.settings.showClock;
+    const lyricShowing = State.mode === "compact" && Boolean(this.currentSyncedLyric());
+    const on = State.mode === "compact" && State.settings.showClock && !lyricShowing;
     this.clockEl.style.opacity = on ? "1" : "0";
     if (!on) return;
     const now = new Date();

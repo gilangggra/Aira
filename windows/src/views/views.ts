@@ -29,8 +29,9 @@ import { buildLaunch } from "./launch";
 import { buildAgendaView, buildReminderView } from "./agenda";
 import { buildClipboardView } from "./clipboard";
 import { buildWeatherView } from "./weather";
-import { buildSpotifyCard, buildSpotifyPill, togglePlay, type SpotifyPillHost } from "./spotify";
-import { SPOTIFY_ID, Spotify, currentArtwork } from "../core/spotify";
+import { buildSpotifyCard, buildSpotifyPill, buildMusicView, togglePlay, type SpotifyPillHost } from "./spotify";
+import { SPOTIFY_ID, Spotify, currentArtwork, spotifyPosition } from "../core/spotify";
+import { SpotifyLyrics, activeLyricLine } from "../core/lyrics";
 import { buildWhatsAppCard } from "./whatsapp";
 import { WHATSAPP_ID } from "../core/whatsapp";
 import { MAIL_ID, type MailCardData } from "../core/mail";
@@ -201,6 +202,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
   );
   const dockChat = dockTab(ICONS.bubbleRound, tl("Ask"), () => go("prompt"));
   const dockHome = dockTab(ICONS.house, tl("Home"), () => go("overview"));
+  const dockMusic = dockTab(ICONS.musicNote, tl("Music"), () => go("music"));
   const dockWeather = dockTab(ICONS.cloudSun, tl("Weather"), () => go("weather"));
   const dockLaunch = dockTab(ICONS.terminal, tl("Agents"), () => go("launch"));
   const dockClips = dockTab(ICONS.clipboard, tl("Clips"), () => go("clipboard"));
@@ -235,7 +237,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
   const dockEl = h(
     "div",
     { id: "dock" },
-    h("div", { class: "dock-tabs" }, dockPlus, dockHome, dockChat, dockWeather, dockLaunch, dockClips, dockNotes, dockMail),
+    h("div", { class: "dock-tabs" }, dockPlus, dockHome, dockChat, dockMusic, dockWeather, dockLaunch, dockClips, dockNotes, dockMail),
     h("div", { class: "dock-actions" }, soundBtn, gearBtn, closeBtn),
   );
 
@@ -267,6 +269,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
       dockPlus.classList.toggle("on", v === "upload");
       dockHome.classList.toggle("on", v === "overview" || v === "empty");
       dockChat.classList.toggle("on", v === "prompt");
+      dockMusic.classList.toggle("on", v === "music");
       dockWeather.classList.toggle("on", v === "weather");
       dockLaunch.classList.toggle("on", v === "launch");
       dockClips.classList.toggle("on", v === "clipboard");
@@ -356,7 +359,7 @@ function buildHomeDashboard(
       class: "dash-card dash-media",
       onclick: () => {
         actions.blip();
-        openTaskDetail(SPOTIFY_ID);
+        actions.setView("music");
       },
     },
     h("div", { class: "dash-media-left" }, mediaArt, mediaFallback, h("div", { class: "dash-media-meta" }, mediaTitle, mediaSub)),
@@ -452,7 +455,11 @@ function buildHomeDashboard(
         mediaFallback.style.display = "";
       }
       mediaTitle.textContent = track?.title || t("No media");
-      mediaSub.textContent = track?.artist || "Spotify";
+      const liveLyric = track && sp.playing && SpotifyLyrics.current?.synced
+        ? activeLyricLine(SpotifyLyrics.current, spotifyPosition(sp, Date.now()))
+        : null;
+      mediaSub.textContent = liveLyric ? `♪ ${liveLyric}` : (track?.artist || "Spotify");
+      mediaSub.classList.toggle("is-lyric", !!liveLyric);
       clear(mediaPlayBtn);
       mediaPlayBtn.append(svg(sp.playing ? ICONS.pause : ICONS.play, 11));
       mediaPlayBtn.classList.toggle("playing", sp.playing);
@@ -612,6 +619,10 @@ function buildOverview(actions: ViewActions): ViewHost {
     }, 30_000);
   }
 
+  const dashNeedsTick = () =>
+    (Airadoro.snapshot.phase !== "idle" && !Airadoro.snapshot.paused) ||
+    (Spotify.state.playing && Spotify.state.track != null);
+
   function syncFocusDashTimer(run: boolean) {
     if (!run) {
       if (focusDashTimer != null) window.clearInterval(focusDashTimer);
@@ -620,12 +631,12 @@ function buildOverview(actions: ViewActions): ViewHost {
     }
     if (focusDashTimer != null) return;
     focusDashTimer = window.setInterval(() => {
-      if (State.mode === "expanded" && (State.view === "overview" || State.view === "empty") && Airadoro.snapshot.phase !== "idle" && !Airadoro.snapshot.paused) {
+      if (State.mode === "expanded" && (State.view === "overview" || State.view === "empty") && dashNeedsTick()) {
         dash.sync(State.tasks);
       } else {
         syncFocusDashTimer(false);
       }
-    }, 1000);
+    }, 500);
   }
 
   return {
@@ -686,7 +697,7 @@ function buildOverview(actions: ViewActions): ViewHost {
       const isDash = overviewScreen === "dash";
       el.classList.toggle("is-dash", isDash);
       el.classList.toggle("is-detail", !isDash);
-      syncFocusDashTimer(isDash && State.mode === "expanded" && Airadoro.snapshot.phase !== "idle" && !Airadoro.snapshot.paused);
+      syncFocusDashTimer(isDash && State.mode === "expanded" && dashNeedsTick());
 
       if (isDash) {
         dash.sync(State.tasks);
@@ -1314,6 +1325,7 @@ export function buildViews(
   map.set("weather", buildWeatherView(actions));
   map.set("clipboard", buildClipboardView(actions));
   map.set("mail", buildMailView(actions));
+  map.set("music", buildMusicView());
   // Not in the Windows v1: web search & web result.
   map.set("searching", buildPlaceholder(tl("Claude is searching…"), ""));
   map.set("result", buildPlaceholder(tl("Result"), ""));

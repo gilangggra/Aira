@@ -30,7 +30,8 @@ export type IslandViewName =
   | "agenda"
   | "reminder"
   | "weather"
-  | "clipboard";
+  | "clipboard"
+  | "music";
 
 export type BotStateName =
   | "idle"
@@ -115,6 +116,8 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   weather: { height: 356, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
   // Clipboard history manager: top bar Mochi, clean clip list below.
   clipboard: { height: 306, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
+  // Dedicated full-bleed artwork music stage + live synced lyric headline.
+  music: { height: 306, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
 };
 
 // The upload views above are only the fallback geometry. Once a file is actually

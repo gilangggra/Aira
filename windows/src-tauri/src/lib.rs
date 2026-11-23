@@ -25,6 +25,7 @@ mod island;
 mod launch;
 mod local_chat;
 mod log;
+mod lyrics;
 mod mail;
 mod net;
 mod notes;
@@ -1072,6 +1073,7 @@ pub fn run() {
             spotify::spotify_control,
             spotify::spotify_open,
             spotify::spotify_installed,
+            lyrics::spotify_lyrics,
             whatsapp::whatsapp_island,
             whatsapp::whatsapp_open,
             whatsapp::whatsapp_close,
