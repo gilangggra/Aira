@@ -1,0 +1,25 @@
+AIRA FOR ANDROID: LICENCES AND NOTICES
+
+Aira for Android, by Gilang Ramadan, is part of Aira (https://github.com/gilangggra/Aira). It is free, has no ads and no analytics.
+
+1. The code of Aira
+
+The source code of Aira is Copyright (c) 2026 Gilang Ramadan and is released under the MIT License. The full text is below ("MIT License").
+
+2. The name, the character, the icon and the sounds
+
+The names "Aira", the character, the app icon and the sounds are Copyright (c) 2026 Gilang Ramadan. All rights reserved (see LICENSE-ASSETS.md in https://github.com/gilangggra/Aira).
+
+3. ZXing
+
+The pairing QR code is read with ZXing Core 3.5.3 ("Zebra Crossing", https://github.com/zxing/zxing), Copyright ZXing authors. It is licensed under the Apache License, Version 2.0, the full text of which is below ("Apache License"). The library is used unmodified; it makes no network connection.
+
+4. AndroidX, Jetpack Compose, CameraX and Kotlin
+
+The user interface, the camera preview and the language runtime come from AndroidX (Jetpack Compose, Material 3, Activity, Lifecycle, CameraX), Copyright The Android Open Source Project, and the Kotlin standard library, Copyright JetBrains s.r.o. and Kotlin Programming Language contributors. They are licensed under the Apache License, Version 2.0, the full text of which is below. They are used unmodified.
+
+No warranty: the software is provided "as is", as the licences below say.
+
+------------------------------
+MIT License
+------------------------------
