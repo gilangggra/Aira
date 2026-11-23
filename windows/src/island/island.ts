@@ -4,7 +4,7 @@
 import { Tracked, Spring, clamp } from "../core/anim";
 import { Bridge, IS_TAURI, onDragDrop, onEvent, type DragDropPayload } from "../core/bridge";
 import {
-  CLOSED_BOT_D, CLOSED_H, closedContent, closedIsland, closedWidth, type ClosedContent,
+  CLOSED_BOT_D, CLOSED_H, SLIM_BAR_H, SLIM_BAR_W, closedContent, closedIsland, closedWidth, type ClosedContent,
 } from "../core/closed";
 import {
   CHAT_OVERLAY_H, COMPACT_W, EXPANDED_CORNER, EXPANDED_W, NOTCH_H, NOTCH_W, PANEL_H, PANEL_W,
@@ -46,6 +46,26 @@ import { Updates } from "./update";
 import { UPDATE_BLUE, showsUpdateHint } from "../whats-new/whats-new";
 
 const BOT_OVERHANG = 40;
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function makeEarSvg(side: "left" | "right"): SVGSVGElement {
+  const el = document.createElementNS(SVG_NS, "svg");
+  el.setAttribute("class", `island-ear ${side}`);
+  el.setAttribute("viewBox", "0 0 32 30");
+  el.setAttribute("fill", "none");
+  el.setAttribute("preserveAspectRatio", "none");
+  el.setAttribute("shape-rendering", "geometricPrecision");
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute(
+    "d",
+    side === "left"
+      ? "M 0 0 C 13.43 0 30 16.57 30 30 L 32 30 L 32 0 Z"
+      : "M 2 30 C 2 16.57 18.57 0 32 0 L 0 0 L 0 30 Z",
+  );
+  path.setAttribute("fill", "currentColor");
+  el.append(path);
+  return el;
+}
 const UPDATE_BLUE_RGB = hexToRGB(UPDATE_BLUE);
 const CLAUDE_DESKTOP_ID = "agent_claude-desktop";
 /** Extra canvas on each side of Mochi, for the witch hat's brim and the Santa hat's tip. */
@@ -534,6 +554,8 @@ export class Island {
     this.islandEl = h(
       "div",
       { id: "island" },
+      makeEarSvg("left"),
+      makeEarSvg("right"),
       this.clipEl,
       this.botGlow,
       this.botCanvas,
@@ -712,7 +734,8 @@ export class Island {
     // Drive the state machine rather than the mode: setting the mode behind its
     // back left it thinking the island was still open, and a click on the compact
     // island then did nothing — the island could never be reopened.
-    this.fsm.forcePetit();
+    if (this.isSlimShape) this.fsm.forceHidden();
+    else this.fsm.forcePetit();
   }
 
   /** Alert from the hook server: open on this view. Pinned alerts never auto-close. */
@@ -1025,9 +1048,14 @@ export class Island {
 
   // ── Geometry ────────────────────────────────────────────────────────────────
 
-  /** The closed island stays on screen (anything but "hidden"). */
+  /** Slim Edge-Drop style notch bar when Shape = "slim". */
+  private get isSlimShape(): boolean {
+    return (State.settings.islandShape || "notch") === "slim";
+  }
+
+  /** The closed island stays on screen (anything but "hidden", or always in Slim mode). */
   private get closedShows(): boolean {
-    return closedIsland(State.settings.closedIsland) !== "hidden";
+    return this.isSlimShape || closedIsland(State.settings.closedIsland) !== "hidden";
   }
 
   private currentSyncedLyric(): string | null {
@@ -1124,6 +1152,7 @@ export class Island {
 
   private targetSize(): { w: number; h: number; r: number } {
     if (State.mode === "hidden" && this.closedShows) {
+      if (this.isSlimShape) return { w: SLIM_BAR_W, h: SLIM_BAR_H, r: 24 };
       return { w: this.closedW, h: CLOSED_H, r: 13 };
     }
     if (State.mode === "compact") {
@@ -1159,7 +1188,7 @@ export class Island {
     } else if (State.mode === "expanded" && State.view === "prompt" && State.chatOverlay !== "none") {
       h = Math.max(h, CHAT_OVERLAY_H);
     }
-    const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
+    const r = State.mode === "expanded" ? (this.isSlimShape ? 24 : EXPANDED_CORNER) : ROUNDED_CORNER;
     return { w, h, r };
   }
 
@@ -1200,11 +1229,18 @@ export class Island {
       ? State.mode === "expanded"
         ? `${r}px`
         : "999px"
-      : `0 0 ${r}px ${r}px`;
+      : this.isSlimShape && hh <= 8
+        ? "0 0 24px 24px / 0 0 100% 100%"
+        : `0 0 ${r}px ${r}px`;
     this.islandEl.style.transformOrigin = `top center`;
     this.islandEl.style.transform = `translateX(-50%) scale(${scale})`;
     const ear = !floating && hh > 2 ? Math.max(0, Math.min(12, hh * 0.45, r * 0.85)) : 0;
     this.islandEl.style.setProperty("--ear", `${ear.toFixed(2)}px`);
+    const slimEarH = this.isSlimShape && !floating && hh > 10 ? Math.max(0, Math.min(28, hh * 0.45, r * 1.15)) : 0;
+    const slimEarW = slimEarH > 0 ? slimEarH * (32 / 30) : 0;
+    this.islandEl.style.setProperty("--slim-ear-w", `${slimEarW.toFixed(2)}px`);
+    this.islandEl.style.setProperty("--slim-ear-h", `${slimEarH.toFixed(2)}px`);
+    this.islandEl.style.setProperty("--slim-ear-overlap", `${(slimEarW - slimEarH).toFixed(2)}px`);
     // These follow the island as it resizes, so they belong here rather than in
     // the state-driven DOM sync.
     this.miniGrid.style.top = `${Math.max(0, (hh - this.compactGridH) / 2)}px`;
@@ -1297,11 +1333,13 @@ export class Island {
   private sendCollapsedSize(force = false) {
     const scale = this.getScale();
     const size = this.closedShows
-      ? { w: Math.round(this.closedW * scale), h: Math.round(CLOSED_H * scale) }
+      ? this.isSlimShape
+        ? { w: Math.round(SLIM_BAR_W * scale), h: Math.round(SLIM_BAR_H * scale) }
+        : { w: Math.round(this.closedW * scale), h: Math.round(CLOSED_H * scale) }
       : { w: 0, h: 0 };
     if (!force && size.w === this.collapsedTo.w && size.h === this.collapsedTo.h) return;
     this.collapsedTo = size;
-    if (size.w > 0) void Bridge.setCollapsed(true, size.w + 24, size.h + (this.isFloatingIsland ? 10 : 0));
+    if (size.w > 0) void Bridge.setCollapsed(true, size.w + 24, size.h + (this.isFloatingIsland ? 10 : this.isSlimShape ? 2 : 0));
     else void Bridge.setCollapsed(true);
   }
 
@@ -1313,7 +1351,7 @@ export class Island {
   private updateClosed() {
     const style = closedIsland(State.settings.closedIsland);
     const track = Spotify.state.track;
-    const content: ClosedContent | null = State.mode === "hidden" || this.collapsed
+    const content: ClosedContent | null = !this.isSlimShape && (State.mode === "hidden" || this.collapsed)
       ? closedContent(style, {
         now: new Date(),
         locale: language(),
@@ -1675,7 +1713,7 @@ export class Island {
       p = { ...p, cx: this.width.target / 2 };
     }
     // The closed island with Mochi in it, as on a Mac without a notch.
-    if (State.mode === "hidden" && closedIsland(State.settings.closedIsland) === "mochi") {
+    if (State.mode === "hidden" && !this.isSlimShape && closedIsland(State.settings.closedIsland) === "mochi") {
       p = { cx: this.width.value / 2, cy: this.height.value / 2, diameter: CLOSED_BOT_D, opacity: 1 };
     }
     this.botCx.target = p.cx;
@@ -1817,6 +1855,8 @@ export class Island {
   private syncDom() {
     this.islandEl.dataset.style = State.settings.islandStyle || "glass";
     this.islandEl.dataset.shape = State.settings.islandShape || "notch";
+    this.islandEl.dataset.bar = State.mode === "hidden" && this.isSlimShape ? "on" : "off";
+    this.fsm.petitToHiddenDelay = this.isSlimShape ? 1.5 : 60;
     const expanded = State.mode === "expanded";
     const greetingActive = expanded && State.view === "greeting";
 
@@ -2032,11 +2072,15 @@ export class Island {
   applySettings() {
     this.islandEl.dataset.style = State.settings.islandStyle || "glass";
     this.islandEl.dataset.shape = State.settings.islandShape || "notch";
+    this.islandEl.dataset.bar = State.mode === "hidden" && this.isSlimShape ? "on" : "off";
+    this.fsm.petitToHiddenDelay = this.isSlimShape ? 1.5 : 60;
     // The closed island may have changed: what it shows, or whether it shows.
     this.closedKey = "";
     this.updateClosed();
     this.applyGeometry();
-    if (State.mode === "hidden") {
+    if (this.isSlimShape && State.mode === "compact" && !this.wasInIsland) {
+      this.fsm.forceHidden();
+    } else if (State.mode === "hidden") {
       this.animateGeometry(true);
       if (this.collapsed) this.sendCollapsedSize();
     }
