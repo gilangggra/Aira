@@ -4,7 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  CLOSED_ISLANDS, CLOSED_MAX_W, CLOSED_MIN_W, CLOSED_PAD, closedContent, closedIsland, closedWidth,
+  CLOSED_ISLANDS, CLOSED_MAX_W, CLOSED_MIN_W, CLOSED_PAD, SLIM_BAR_H, SLIM_BAR_W,
+  closedContent, closedIsland, closedWidth,
 } from "../src/core/closed.ts";
 
 const NOW = new Date(2026, 10, 2, 20, 28);
@@ -52,4 +53,6 @@ test("the island is as wide as its line, within bounds", () => {
   assert.equal(closedWidth(100), 100 + CLOSED_PAD * 2);
   assert.equal(closedWidth(100, 12), 112 + CLOSED_PAD * 2);
   assert.equal(closedWidth(5000), CLOSED_MAX_W);
+  assert.equal(SLIM_BAR_W, 240);
+  assert.equal(SLIM_BAR_H, 4);
 });

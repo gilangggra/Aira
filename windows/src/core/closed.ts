@@ -22,6 +22,9 @@ export function closedIsland(value: unknown): ClosedIsland {
  *  Mac's resting island on a screen without a notch (IslandScreenGeometry). */
 export const CLOSED_H = 24;
 export const CLOSED_MIN_W = 80;
+/** Slim top-edge bar when islandShape is "slim". */
+export const SLIM_BAR_W = 240;
+export const SLIM_BAR_H = 4;
 /** Mochi in it, as on that Mac: centred, a little smaller than the island is tall. */
 export const CLOSED_BOT_D = 18;
 /** Widest: a long song title is cut, the island doesn't run across the screen. */

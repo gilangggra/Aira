@@ -916,6 +916,21 @@
       "ko": "반투명",
       "ja": "半透明"
     },
+    "Slim Notch": {
+      "zh-Hans": "极简窄刘海",
+      "hi": "स्लिम नॉच",
+      "es": "Muesca delgada",
+      "ar": "نوتش نحيف",
+      "fr": "Encoche fine",
+      "bn": "স্লিম নচ",
+      "pt-BR": "Entalhe fino",
+      "ru": "Тонкая чёлка",
+      "id": "Notch Tipis",
+      "de": "Schmale Notch",
+      "tr": "İnce Çentik",
+      "ko": "슬림 노치",
+      "ja": "スリムノッチ"
+    },
     "AI Providers": {
       "zh-Hans": "AI 提供商",
       "hi": "AI प्रदाता",

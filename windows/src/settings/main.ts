@@ -1302,6 +1302,7 @@ function generalSections(): HTMLElement[] {
   const shapeCtrl = segmentedControl(
     [
       ["notch", t("Top Notch")],
+      ["slim", t("Slim Notch")],
       ["island", t("Dynamic Island")],
     ],
     settings.islandShape || "notch",
