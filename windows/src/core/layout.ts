@@ -26,7 +26,11 @@ export type IslandViewName =
   | "wardrobe"
   | "update"
   | "whatsNew"
-  | "launch";
+  | "launch"
+  | "agenda"
+  | "reminder"
+  | "weather"
+  | "clipboard";
 
 export type BotStateName =
   | "idle"
@@ -103,6 +107,14 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   whatsNew: { height: 222, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
   // A new Claude Code session: Mochi on the left, the project and the prompt (Mac: .launch).
   launch: { height: 160, botX: 58, botY: null, botDiameter: 52, agentMode: "none" },
+  // Daily calendar & task planner: Mochi on the left, mini-calendar + daily tasks on the right.
+  agenda: { height: 248, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
+  // Scheduled task reminder pop-up: Mochi on the left, task + Done / Snooze buttons on the right.
+  reminder: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
+  // Live local weather & air quality: Mochi on the left, atmospheric card + forecast on the right.
+  weather: { height: 292, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
+  // Clipboard history manager: Mochi on the left, searchable & pinnable clip list on the right.
+  clipboard: { height: 264, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
 };
 
 // The upload views above are only the fallback geometry. Once a file is actually
@@ -112,9 +124,15 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
 /** The question view with options to pick from: room for two rows of them. */
 export const QUESTION_PICKER_H = 200;
 
+/** Active sub-panel inside the chat view that needs full browsing height. */
+export type ChatOverlay = "none" | "picker" | "history";
+
+/** Minimum expanded height when the chat model picker or history panel is open. */
+export const CHAT_OVERLAY_H = 320;
+
 /** Chat view grows with the conversation — IslandContainer.chatPromptHeight. */
 export function chatPromptHeight(messageCount: number): number {
-  return Math.min(300, 240 + messageCount * 40);
+  return Math.min(316, 256 + messageCount * 40);
 }
 
 export function islandSize(

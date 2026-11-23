@@ -2,12 +2,12 @@
 // Mirrors IslandRootView.swift + IslandWindowController.swift.
 
 import { Tracked, Spring, clamp } from "../core/anim";
-import { Bridge, IS_TAURI, onDragDrop, type DragDropPayload } from "../core/bridge";
+import { Bridge, IS_TAURI, onDragDrop, onEvent, type DragDropPayload } from "../core/bridge";
 import {
   CLOSED_BOT_D, CLOSED_H, closedContent, closedIsland, closedWidth, type ClosedContent,
 } from "../core/closed";
 import {
-  EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
+  CHAT_OVERLAY_H, EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
   islandSize,
   QUESTION_PICKER_H,
@@ -23,10 +23,17 @@ import { SeasonCache, parseOutfit } from "../mochi/wardrobe";
 import { UploadCanvas } from "../upload/canvas";
 import { USC, UploadSeq, uploadProgressCurve } from "../upload/sequence";
 import { dominantPct, planColor } from "../core/plan";
+import { dueAgendaReminders, loadAgendaTasks, markReminderNotified, pendingCountForDate } from "../core/agenda";
+import { dayKey } from "../core/calendar";
+import { Weather, WEATHER_TTL_SEC, aqiInfo, formatTemp, upcomingRainPeak, wmoCondition } from "../core/weather";
+import { Clipboard } from "../core/clipboard";
+import { AIRADORO_ID, AiradoroEngine } from "../core/airadoro";
+import { Airadoro } from "./airadoro";
 import { language, t, tl } from "../i18n/i18n";
 import { claudeCompactPillVisible, closePlanCard, openPlanColor, planCardOpen } from "../views/usage";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
 import { h } from "../views/dom";
+import { buildMiniWeatherIcon } from "../views/weather-art";
 import { buildSessionDropList, type SessionDropList } from "../views/session-drop";
 import { DROP_TEXT_RIGHT_WITH_LIST, dropTargetAt, dropTargets } from "../core/launch";
 import { IslandStateMachine } from "./fsm";
@@ -47,7 +54,7 @@ const BOT_SIDE = 24;
 const HIT_MARGIN = 14;
 
 /** The views with a text field: the island takes the keyboard while one is on. */
-const TYPING_VIEWS: ReadonlySet<IslandViewName> = new Set(["prompt", "launch"]);
+const TYPING_VIEWS: ReadonlySet<IslandViewName> = new Set(["prompt", "launch", "agenda", "clipboard"]);
 
 /** The three views the drop sequence owns; leaving them stops the engine. */
 const UPLOAD_VIEWS: ReadonlySet<IslandViewName> = new Set(["upload", "uploading", "choose"]);
@@ -91,6 +98,16 @@ export class Island {
   private compactPlan!: HTMLElement;
   private compactPlanDot!: HTMLElement;
   private compactPlanLabel!: HTMLElement;
+  private compactAgenda!: HTMLElement;
+  private compactAgendaLabel!: HTMLElement;
+  private compactWeather!: HTMLElement;
+  private compactWeatherIcon!: HTMLElement;
+  private compactWeatherLabel!: HTMLElement;
+  private compactWeatherDot!: HTMLElement;
+  private compactWeatherIconKey = "";
+  private compactAiradoro!: HTMLElement;
+  private compactAiradoroLabel!: HTMLElement;
+  private compactAiradoroTimer: number | null = null;
   private wakeStrip!: HTMLElement;
 
   private header!: ViewHost;
@@ -172,6 +189,14 @@ export class Island {
       this.dirty = true;
       this.ensureRunning();
     });
+    Weather.subscribe(() => {
+      this.dirty = true;
+      this.ensureRunning();
+    });
+    void Weather.ensureLoaded(false);
+    window.setInterval(() => {
+      void Weather.ensureLoaded(false);
+    }, WEATHER_TTL_SEC * 1000);
   }
 
   /** The request has its answer: the card goes and the session carries on. */
@@ -310,6 +335,22 @@ export class Island {
         this.engine.triggerEmote("happy");
         this.collapse();
       },
+      emote: (name) => this.emote(name),
+      focusTask: (title, taskId) => {
+        if (Airadoro.startForTask(title, taskId)) {
+          State.setFocus(AIRADORO_ID);
+          this.setView("overview");
+        }
+      },
+      sendToChat: (text) => {
+        State.promptContext = {
+          kind: "window",
+          appName: t("Clipboard"),
+          title: text.trim().slice(0, 140),
+          url: /^https?:\/\/\S+$/i.test(text.trim()) ? text.trim() : undefined,
+        };
+        this.setView("prompt");
+      },
       holdOpen: (on) => {
         if (this.holdingOpen === on) return;
         this.holdingOpen = on;
@@ -352,6 +393,67 @@ export class Island {
       this.compactPlanDot,
       this.compactPlanLabel,
     );
+    this.compactAgendaLabel = h("span", { class: "compact-agenda-label" });
+    this.compactAgenda = h(
+      "button",
+      {
+        id: "compact-agenda",
+        title: tl("Calendar"),
+        onmousedown: (e) => {
+          e.stopPropagation();
+        },
+        onclick: (e) => {
+          e.stopPropagation();
+          const me = e as MouseEvent;
+          if (me.button === 0) this.openAgenda();
+        },
+      },
+      h("i", { class: "compact-agenda-dot" }),
+      this.compactAgendaLabel,
+    );
+    this.compactWeatherIcon = h("span", { class: "compact-weather-ico" });
+    this.compactWeatherLabel = h("span", { class: "compact-weather-label" });
+    this.compactWeatherDot = h("i", { class: "compact-weather-dot" });
+    this.compactWeather = h(
+      "button",
+      {
+        id: "compact-weather",
+        title: tl("Weather"),
+        onmousedown: (e) => {
+          e.stopPropagation();
+        },
+        onclick: (e) => {
+          e.stopPropagation();
+          const me = e as MouseEvent;
+          if (me.button === 0) this.openWeather();
+        },
+      },
+      this.compactWeatherIcon,
+      this.compactWeatherLabel,
+      this.compactWeatherDot,
+    );
+    this.compactAiradoroLabel = h("span", { class: "compact-airadoro-label" });
+    this.compactAiradoro = h(
+      "button",
+      {
+        id: "compact-airadoro",
+        title: "Airadoro",
+        onmousedown: (e) => {
+          e.stopPropagation();
+        },
+        onclick: (e) => {
+          e.stopPropagation();
+          const me = e as MouseEvent;
+          if (me.button === 0) {
+            Sound.play("click");
+            State.setFocus(AIRADORO_ID);
+            this.expand("overview");
+          }
+        },
+      },
+      h("i", { class: "compact-airadoro-dot" }),
+      this.compactAiradoroLabel,
+    );
 
     this.header = buildHeader(actions);
     this.views = buildViews(actions, () => this.animateGeometry(false));
@@ -388,6 +490,9 @@ export class Island {
       this.botCanvas,
       this.miniGrid,
       this.compactPlan,
+      this.compactAgenda,
+      this.compactWeather,
+      this.compactAiradoro,
       this.clockEl,
       this.closedEl,
       this.countdown,
@@ -494,6 +599,26 @@ export class Island {
     State.showingPlanDetail = true;
     this.fsm.forceHome();
     this.expand("overview");
+    State.notify();
+  }
+
+  /** Click on compact agenda badge: opens the Calendar & Task Planner view. */
+  openAgenda() {
+    Sound.resume();
+    State.lastActivity = performance.now();
+    this.fsm.userInteracted();
+    this.fsm.forceHome();
+    this.expand("agenda");
+    State.notify();
+  }
+
+  /** Click on compact weather pill: opens the Live Weather view. */
+  openWeather() {
+    Sound.resume();
+    State.lastActivity = performance.now();
+    this.fsm.userInteracted();
+    this.fsm.forceHome();
+    this.expand("weather");
     State.notify();
   }
 
@@ -767,9 +892,9 @@ export class Island {
    */
   private swallow(path: string) {
     const name = path.split(/[\\/]/).pop() || "file";
+    State.startNewChatSession();
     State.droppedFile = { name, path };
     State.promptContext = { kind: "file", name, path };
-    State.chatHistory = [];
     void Bridge.chatReset();
 
     UploadSeq.performDrop(State.uploadDuration);
@@ -855,11 +980,13 @@ export class Island {
 
   private targetSize(): { w: number; h: number; r: number } {
     if (State.mode === "hidden" && this.closedShows) {
-      return { w: this.closedW, h: CLOSED_H, r: 10 };
+      return { w: this.closedW, h: CLOSED_H, r: 13 };
     }
     let { w, h } = islandSize(State.mode, State.view, State.chatHistory.length);
     if (State.mode === "expanded" && State.view === "question" && State.pendingApproval?.questions) {
       h = QUESTION_PICKER_H;
+    } else if (State.mode === "expanded" && State.view === "prompt" && State.chatOverlay !== "none") {
+      h = Math.max(h, CHAT_OVERLAY_H);
     }
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };
@@ -879,14 +1006,23 @@ export class Island {
     this.ensureRunning();
   }
 
+  private getScale(): number {
+    const s = State.settings.islandScale;
+    return s === "compact" ? 0.9 : s === "large" ? 1.1 : 1.0;
+  }
+
   private applyGeometry() {
+    const scale = this.getScale();
     const w = this.width.value;
     const hh = this.height.value;
     const r = this.radius.value;
     this.islandEl.style.width = `${w}px`;
     this.islandEl.style.height = `${hh}px`;
     this.islandEl.style.borderRadius = `0 0 ${r}px ${r}px`;
-    this.islandEl.style.transform = `translateX(-50%)`;
+    this.islandEl.style.transformOrigin = `top center`;
+    this.islandEl.style.transform = `translateX(-50%) scale(${scale})`;
+    const ear = hh > 2 ? Math.max(0, Math.min(12, hh * 0.45, r * 0.85)) : 0;
+    this.islandEl.style.setProperty("--ear", `${ear.toFixed(2)}px`);
     // These follow the island as it resizes, so they belong here rather than in
     // the state-driven DOM sync.
     this.miniGrid.style.left = `${w - 40 - 14.5}px`;
@@ -895,8 +1031,7 @@ export class Island {
     this.greetingCanvas.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.uploadCanvas.el.style.left = `${(w - EXPANDED_W) / 2}px`;
 
-    const viewportW = window.innerWidth > 0 ? window.innerWidth : PANEL_W;
-    const rect = { x: (viewportW - w) / 2, y: 0, w, h: hh };
+    const rect = this.islandRect();
     const p = this.pushedRect;
     if (Math.abs(p.x - rect.x) > 0.5 || Math.abs(p.w - rect.w) > 0.5 || Math.abs(p.h - rect.h) > 0.5) {
       this.pushedRect = rect;
@@ -906,8 +1041,9 @@ export class Island {
 
   /** Island rect in window coordinates (origin top-left of the 720×320 window). */
   private islandRect(): { x: number; y: number; w: number; h: number } {
-    const w = this.width.value;
-    const hh = this.height.value;
+    const scale = this.getScale();
+    const w = this.width.value * scale;
+    const hh = this.height.value * scale;
     const viewportW = window.innerWidth > 0 ? window.innerWidth : PANEL_W;
     return { x: (viewportW - w) / 2, y: 0, w, h: hh };
   }
@@ -972,10 +1108,13 @@ export class Island {
 
   /** Tells Rust the folded window's size: the closed island's, or none (the strip). */
   private sendCollapsedSize(force = false) {
-    const size = this.closedShows ? { w: this.closedW, h: CLOSED_H } : { w: 0, h: 0 };
+    const scale = this.getScale();
+    const size = this.closedShows
+      ? { w: Math.round(this.closedW * scale), h: Math.round(CLOSED_H * scale) }
+      : { w: 0, h: 0 };
     if (!force && size.w === this.collapsedTo.w && size.h === this.collapsedTo.h) return;
     this.collapsedTo = size;
-    if (size.w > 0) void Bridge.setCollapsed(true, size.w, size.h);
+    if (size.w > 0) void Bridge.setCollapsed(true, size.w + 24, size.h);
     else void Bridge.setCollapsed(true);
   }
 
@@ -1096,6 +1235,8 @@ export class Island {
     });
 
     void onDragDrop((e) => this.onDragDrop(e));
+    void onEvent<string>("clipboard-text", (text) => Clipboard.capture(text));
+    if (Clipboard.paused) void Bridge.clipboardSetPaused(true);
 
     // Outside Tauri (plain browser) drive the cursor from DOM events so the
     // island can be inspected with `npm run dev`.
@@ -1186,10 +1327,11 @@ export class Island {
   private isBotHit(x: number, y: number): boolean {
     // Out on the desktop, the island's Mochi is invisible: nothing to hit.
     if (State.mochiOnDesktop) return false;
+    const scale = this.getScale();
     const rect = this.islandRect();
-    const cx = rect.x + this.botCx.value;
-    const cy = rect.y + this.botCy.value;
-    const radius = this.botSize.value / 2;
+    const cx = rect.x + this.botCx.value * scale;
+    const cy = rect.y + this.botCy.value * scale;
+    const radius = (this.botSize.value * scale) / 2;
     return (x - cx) ** 2 + (y - cy) ** 2 <= radius * radius;
   }
 
@@ -1469,6 +1611,7 @@ export class Island {
   // ── DOM sync ────────────────────────────────────────────────────────────────
 
   private syncDom() {
+    this.islandEl.dataset.style = State.settings.islandStyle || "solid";
     const expanded = State.mode === "expanded";
     const greetingActive = expanded && State.view === "greeting";
 
@@ -1536,6 +1679,94 @@ export class Island {
       this.compactPlanLabel.textContent = pct != null ? `${Math.round(pct)}%` : "—";
     }
 
+    // Compact Airadoro live focus countdown pill
+    const airaSnap = Airadoro.snapshot;
+    const showAiradoro = State.mode === "compact" && airaSnap.phase !== "idle";
+    this.compactAiradoro.style.opacity = showAiradoro ? "1" : "0";
+    this.compactAiradoro.style.pointerEvents = showAiradoro ? "auto" : "none";
+    this.compactAiradoro.classList.toggle("rest", airaSnap.phase === "rest");
+    this.compactAiradoro.classList.toggle("paused", airaSnap.paused);
+    if (showAiradoro) {
+      const others = State.otherTasks.slice(0, 4);
+      let rightOffset = others.length > 0 ? 58 : 20;
+      if (showPlan) rightOffset += 48;
+      this.compactAiradoro.style.right = `${rightOffset}px`;
+      const rem = Airadoro.remaining() ?? 0;
+      this.compactAiradoroLabel.textContent = AiradoroEngine.clock(rem);
+      this.compactAiradoro.title = Airadoro.taskTitle ? `🎯 ${Airadoro.taskTitle}` : "Airadoro";
+    }
+    const tickCompactAiradoro = showAiradoro && !airaSnap.paused;
+    if (tickCompactAiradoro && this.compactAiradoroTimer == null) {
+      this.compactAiradoroTimer = window.setInterval(() => {
+        if (State.mode !== "compact" || Airadoro.snapshot.phase === "idle" || Airadoro.snapshot.paused) {
+          if (this.compactAiradoroTimer != null) window.clearInterval(this.compactAiradoroTimer);
+          this.compactAiradoroTimer = null;
+          return;
+        }
+        const rem = Airadoro.remaining() ?? 0;
+        this.compactAiradoroLabel.textContent = AiradoroEngine.clock(rem);
+      }, 1000);
+    } else if (!tickCompactAiradoro && this.compactAiradoroTimer != null) {
+      window.clearInterval(this.compactAiradoroTimer);
+      this.compactAiradoroTimer = null;
+    }
+
+    // Compact agenda pending tasks indicator
+    const pendingToday = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
+    const showAgenda = State.mode === "compact" && pendingToday > 0;
+    this.compactAgenda.style.opacity = showAgenda ? "1" : "0";
+    this.compactAgenda.style.pointerEvents = showAgenda ? "auto" : "none";
+    if (showAgenda) {
+      const others = State.otherTasks.slice(0, 4);
+      let rightOffset = others.length > 0 ? 58 : 20;
+      if (showPlan) rightOffset += 48;
+      if (showAiradoro) rightOffset += 62;
+      this.compactAgenda.style.right = `${rightOffset}px`;
+      this.compactAgendaLabel.textContent = String(pendingToday);
+    }
+
+    // Compact live weather pill on the left next to Mochi
+    const snap = Weather.snapshot;
+    const showWeather = State.mode === "compact" && snap != null;
+    this.compactWeather.style.opacity = showWeather ? "1" : "0";
+    this.compactWeather.style.pointerEvents = showWeather ? "auto" : "none";
+    if (showWeather && snap) {
+      const cond = wmoCondition(snap.weatherCode, snap.isDay);
+      const isRainingNow = (snap.precipitationMm ?? 0) > 0 || cond.kind === "rain" || cond.kind === "drizzle" || cond.kind === "storm";
+      const rainSoon = upcomingRainPeak(snap, new Date(), 2);
+      const rainAlert = !isRainingNow && rainSoon != null && rainSoon.precipProb >= 55;
+      const aqi = aqiInfo(snap.usAqi);
+      const aqiAlert = aqi != null && snap.usAqi != null && snap.usAqi >= 101;
+
+      this.compactWeather.classList.toggle("rain-alert", rainAlert);
+      this.compactWeather.classList.toggle("has-aqi-dot", aqiAlert);
+      if (aqiAlert && aqi) {
+        this.compactWeatherDot.style.background = aqi.color;
+        this.compactWeatherDot.style.boxShadow = `0 0 5px ${aqi.color}`;
+      }
+
+      const iconKey = `${cond.kind}:${snap.isDay ? "1" : "0"}`;
+      if (this.compactWeatherIconKey !== iconKey) {
+        this.compactWeatherIconKey = iconKey;
+        this.compactWeatherIcon.replaceChildren(buildMiniWeatherIcon(cond.kind, snap.isDay, 12));
+      }
+
+      const tempStr = formatTemp(snap.tempC, Weather.unit);
+      this.compactWeatherLabel.textContent = rainAlert && rainSoon
+        ? `${tempStr} · ${rainSoon.precipProb}%`
+        : tempStr;
+
+      const tipParts = [
+        `${snap.city} · ${t(cond.label)}`,
+        `${t("Feels like")} ${formatTemp(snap.feelsLikeC, Weather.unit)}`,
+      ];
+      if (rainSoon) tipParts.push(`${t("Rain chance")} ${rainSoon.precipProb}% (${rainSoon.hour})`);
+      if (aqi && snap.usAqi != null) tipParts.push(`AQI ${snap.usAqi}`);
+      this.compactWeather.title = tipParts.join(" · ");
+    } else {
+      this.compactWeather.classList.remove("rain-alert", "has-aqi-dot");
+    }
+
     this.updateClock();
 
     syncMiniBotStates(State.tasks);
@@ -1557,9 +1788,11 @@ export class Island {
 
   /** Applies settings coming from Rust at boot. */
   applySettings() {
+    this.islandEl.dataset.style = State.settings.islandStyle || "solid";
     // The closed island may have changed: what it shows, or whether it shows.
     this.closedKey = "";
     this.updateClosed();
+    this.applyGeometry();
     if (State.mode === "hidden") {
       this.animateGeometry(true);
       if (this.collapsed) this.sendCollapsedSize();
@@ -1571,7 +1804,34 @@ export class Island {
     this.fsm.openOnHover = State.settings.openOnHover;
     State.notify();
     // ponytail: one timer for the life of the window; a minute is the clock's finest tick.
-    this.clockTimer ??= window.setInterval(() => this.updateClock(), 10_000);
+    this.clockTimer ??= window.setInterval(() => {
+      this.updateClock();
+      this.checkAgendaReminders();
+    }, 10_000);
+    this.checkAgendaReminders();
+  }
+
+  /** Surfaces a pop-up reminder card when a scheduled agenda task's time arrives. */
+  private checkAgendaReminders() {
+    if (
+      State.paused ||
+      State.pendingApproval != null ||
+      State.view === "greeting" ||
+      State.view === "uploading" ||
+      State.view === "reminder"
+    ) {
+      return;
+    }
+    const tasks = loadAgendaTasks();
+    const due = dueAgendaReminders(tasks, new Date());
+    if (due.length === 0) return;
+    const task = due[0];
+    const slotKey = task.time ? `${task.date} ${task.time}` : `${task.date} snooze`;
+    markReminderNotified(tasks, task.id, slotKey);
+    State.activeReminder = { id: task.id, date: task.date, title: task.title, time: task.time };
+    Sound.play("finish");
+    this.engine.triggerEmote("surprised");
+    this.alert("reminder");
   }
 
   get panelSize() {
@@ -1579,6 +1839,7 @@ export class Island {
   }
 
   get chatHeight() {
-    return chatPromptHeight(State.chatHistory.length);
+    const base = chatPromptHeight(State.chatHistory.length);
+    return State.chatOverlay !== "none" ? Math.max(base, CHAT_OVERLAY_H) : base;
   }
 }

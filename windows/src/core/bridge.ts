@@ -9,6 +9,7 @@ import type { Settings } from "./state";
 import type { RecapHistory, RecapPrefs } from "../recap/summary";
 import type { SpotifyState } from "./spotify";
 import type { UpdateStatus } from "./update";
+import type { WeatherLocation, WeatherSnapshot } from "./weather";
 import type { WaIslandView, WaSettingsView, WaTestResult } from "./whatsapp";
 
 export const IS_TAURI =
@@ -388,6 +389,7 @@ export const Bridge = {
   chatSend: (query: string, context: ChatContext | null, mail = false) =>
     callOrThrow<{ text: string }>("chat_send", { query, context, mail }),
   chatReset: () => call<void>("chat_reset"),
+  chatRestore: (turns: [string, string][]) => call<void>("chat_restore", { turns }),
   /**
    * The models a provider offers, for the picker in the chat view. Rust asks
    * the provider only when it has a key (or a server address).
@@ -521,6 +523,18 @@ export const Bridge = {
   updateInstall: () => call<void>("update_install"),
   /** The release's page on github.com. */
   updateOpenPage: () => call<void>("update_open_page"),
+
+  // ── Live Weather & Air Quality (src-tauri/src/weather.rs) ─────────────────
+  fetchWeather: (lat: number, lon: number, city: string) =>
+    callOrThrow<WeatherSnapshot>("fetch_weather", { lat, lon, city }),
+  searchWeatherCity: (query: string) =>
+    callOrThrow<WeatherLocation[]>("search_weather_city", { query }),
+  detectWeatherLocation: () => call<WeatherLocation | null>("detect_weather_location"),
+
+  // ── Clipboard History Manager (src-tauri/src/clipboard.rs) ────────────────
+  clipboardReadText: () => call<string | null>("clipboard_read_text"),
+  clipboardWriteText: (text: string) => call<void>("clipboard_write_text", { text }),
+  clipboardSetPaused: (paused: boolean) => call<void>("clipboard_set_paused", { paused }),
 };
 
 export type SpotifyAction = "playPause" | "next" | "previous" | "seek" | "shuffle" | "repeat" | "volume";

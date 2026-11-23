@@ -1,6 +1,6 @@
 // App state — mirror of AppState.swift (the parts the island needs).
 
-import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
+import type { BotEmoteName, BotStateName, ChatOverlay, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 import {
   DEFAULT_MAIN_PILL, HOST_OS, availablePills, orderPills, pillDefinition, sanitizeDeclared,
@@ -13,6 +13,15 @@ import type { Bindings } from "./shortcuts";
 import { DEFAULT_OUTFIT, type Outfit } from "../mochi/wardrobe";
 import { pillColor } from "./pill-colors";
 import { Spotify, musicPlaying } from "./spotify";
+import {
+  deleteChatSession,
+  loadActiveChatSessionId,
+  loadChatSessions,
+  saveActiveChatSessionId,
+  saveChatSessions,
+  upsertChatSession,
+  type ChatSession,
+} from "./chat-sessions";
 
 export type AgentSource = "claudeCode" | "n8n" | "agent";
 export type PillBadge = "approval" | "finished" | "error";
@@ -59,10 +68,16 @@ export interface AskedQuestion {
   multiSelect: boolean;
 }
 
+export interface ChatAttachment {
+  name: string;
+  path?: string;
+}
+
 export interface ChatMessage {
   id: number;
   role: "user" | "assistant";
   content: string;
+  attachment?: ChatAttachment;
 }
 
 export type PromptContext =
@@ -109,6 +124,12 @@ export interface Settings {
   showClock: boolean;
   /** What the closed island shows at the top of the screen (see core/closed.ts). */
   closedIsland: string;
+  /** Position of the island on screen: "top" (default, center), "topLeft", "topRight". */
+  islandPosition?: string;
+  /** Scale of the island: "normal" (default), "compact" (90%), "large" (110%). */
+  islandScale?: string;
+  /** Visual style: "solid" (OLED black), "glass" (acrylic blur), "translucent". */
+  islandStyle?: string;
   absenceInterval: number;
   /** Declared pills next to the main one (at most 4), in the order they were added. */
   activeIntegrations: string[];
@@ -182,6 +203,9 @@ export const DEFAULT_SETTINGS: Settings = {
   alertsFromAllPills: false,
   showClock: false,
   closedIsland: "mochi",
+  islandPosition: "top",
+  islandScale: "normal",
+  islandStyle: "solid",
   absenceInterval: 180,
   activeIntegrations: [
     "integration_resend", "integration_n8n", "integration_vercel", "integration_github",
@@ -240,8 +264,12 @@ class AppState {
   promptContext: PromptContext | null = null;
   droppedFile: { name: string; path: string } | null = null;
   noteMessage: string | null = null;
+  activeReminder: { id: string; date: string; title: string; time?: string } | null = null;
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
+  chatSessions: ChatSession[] = [];
+  activeChatSessionId: string | null = null;
+  chatOverlay: ChatOverlay = "none";
   pendingApproval: ApprovalInfo | null = null;
   /** Requests waiting in line when another card is already up (Mac ApprovalQueue). */
   approvalQueue: ApprovalInfo[] = [];
@@ -537,6 +565,77 @@ class AppState {
   defaultView(): IslandViewName {
     if (this.pendingApproval) return this.pendingApproval.questions ? "question" : "approval";
     return this.tasks.length === 0 ? "empty" : "overview";
+  }
+
+  constructor() {
+    this.hydrateChatSessions();
+  }
+
+  hydrateChatSessions() {
+    this.chatSessions = loadChatSessions();
+    const activeId = loadActiveChatSessionId();
+    const found = activeId ? this.chatSessions.find((s) => s.id === activeId) : undefined;
+    if (found) {
+      this.activeChatSessionId = found.id;
+      this.chatHistory = found.messages.map((m) => ({ ...m }));
+    } else {
+      this.activeChatSessionId = null;
+      saveActiveChatSessionId(null);
+    }
+  }
+
+  saveCurrentChatSession() {
+    if (this.chatHistory.length === 0) return;
+    const res = upsertChatSession(this.chatSessions, this.activeChatSessionId, this.chatHistory);
+    this.chatSessions = res.sessions;
+    this.activeChatSessionId = res.activeId;
+    saveChatSessions(this.chatSessions);
+    saveActiveChatSessionId(this.activeChatSessionId);
+  }
+
+  startNewChatSession() {
+    this.chatHistory = [];
+    this.activeChatSessionId = null;
+    this.chatOverlay = "none";
+    this.droppedFile = null;
+    this.promptContext = null;
+    saveActiveChatSessionId(null);
+  }
+
+  clearDroppedFile() {
+    this.droppedFile = null;
+    this.promptContext = null;
+  }
+
+  selectChatSession(id: string): ChatMessage[] | null {
+    const found = this.chatSessions.find((s) => s.id === id);
+    if (!found) return null;
+    this.activeChatSessionId = found.id;
+    this.chatHistory = found.messages.map((m) => ({ ...m }));
+    this.chatOverlay = "none";
+    this.droppedFile = null;
+    this.promptContext = null;
+    saveActiveChatSessionId(found.id);
+    return this.chatHistory;
+  }
+
+  deleteChatSessionById(id: string) {
+    this.chatSessions = deleteChatSession(this.chatSessions, id);
+    saveChatSessions(this.chatSessions);
+    if (this.activeChatSessionId === id) {
+      this.chatHistory = [];
+      this.activeChatSessionId = null;
+      saveActiveChatSessionId(null);
+    }
+  }
+
+  clearAllChatSessions() {
+    this.chatSessions = [];
+    this.chatHistory = [];
+    this.activeChatSessionId = null;
+    this.chatOverlay = "none";
+    saveChatSessions([]);
+    saveActiveChatSessionId(null);
   }
 }
 

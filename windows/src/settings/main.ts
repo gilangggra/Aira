@@ -26,6 +26,10 @@ import { agentsSection } from "./agents";
 import { phoneSection } from "./phone";
 import { whatsappSection } from "./whatsapp";
 import { WHATSAPP_ID } from "../core/whatsapp";
+import {
+  AIRADORO_STORAGE_REST, AIRADORO_STORAGE_WORK, DEFAULT_REST_MINUTES, DEFAULT_WORK_MINUTES,
+  loadStoredMinutes, saveStoredMinutes,
+} from "../core/airadoro";
 import { updateRows, updatesListener } from "./updates";
 import { colorDot } from "./colors";
 import { renderDiff, statusDot } from "./parts";
@@ -72,6 +76,79 @@ function toggle(on: boolean, onChange: (v: boolean) => void): HTMLElement {
 function setSwitch(el: HTMLElement, on: boolean) {
   el.classList.toggle("on", on);
   el.setAttribute("aria-pressed", String(on));
+}
+
+/** Runs `fn` while preserving the scroll position of `.hub-scroll` so DOM rebuilds don't jump the viewport. */
+function preserveScroll(anchor: HTMLElement, fn: () => void) {
+  const scroller = anchor.closest(".hub-scroll") as HTMLElement | null;
+  const top = scroller ? scroller.scrollTop : 0;
+  fn();
+  if (scroller) scroller.scrollTop = top;
+}
+
+function segmentedControl<T extends string>(
+  options: [T, string][],
+  initial: T,
+  onChange: (v: T) => void,
+): { element: HTMLElement; setValue: (v: T) => void } {
+  const el = h("div", { class: "hub-segmented" });
+  const buttons = new Map<T, HTMLButtonElement>();
+  for (const [id, text] of options) {
+    const b = h("button", {
+      type: "button",
+      class: id === initial ? "on" : "",
+      text,
+      onclick: () => {
+        for (const [otherId, otherBtn] of buttons) {
+          otherBtn.classList.toggle("on", otherId === id);
+        }
+        onChange(id);
+      },
+    }) as HTMLButtonElement;
+    buttons.set(id, b);
+    el.append(b);
+  }
+  return {
+    element: el,
+    setValue: (v: T) => {
+      for (const [id, b] of buttons) {
+        b.classList.toggle("on", id === v);
+      }
+    },
+  };
+}
+
+function secretField(input: HTMLInputElement): HTMLElement {
+  const toggleBtn = h("button", {
+    type: "button",
+    class: "secret-toggle",
+    title: "Toggle",
+    onclick: () => {
+      const isSecret = input.type === "password";
+      input.type = isSecret ? "text" : "password";
+      const path = toggleBtn.querySelector("path");
+      if (path) {
+        path.setAttribute(
+          "d",
+          isSecret
+            ? "M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"
+            : "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+        );
+      }
+    },
+  });
+  const eyeSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  eyeSvg.setAttribute("viewBox", "0 0 24 24");
+  eyeSvg.setAttribute("fill", "none");
+  eyeSvg.setAttribute("stroke", "currentColor");
+  eyeSvg.setAttribute("stroke-width", "2");
+  eyeSvg.setAttribute("stroke-linecap", "round");
+  eyeSvg.setAttribute("stroke-linejoin", "round");
+  const eyePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  eyePath.setAttribute("d", "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z");
+  eyeSvg.append(eyePath);
+  toggleBtn.append(eyeSvg);
+  return h("div", { class: "secret-field" }, input, toggleBtn);
 }
 
 // ── Changes to Claude Code's settings.json ────────────────────────────────────
@@ -370,43 +447,43 @@ const SUBSCRIPTION_NAMES: Record<string, string> = {
  * its API key. Says whether the tool is installed and how to sign in.
  */
 function subscriptionsSection(): HTMLElement {
-  const list = h("div", { style: "display:flex;flex-direction:column;gap:12px" });
+  const list = h("div", { class: "setting-list" });
   const draw = (rows: SubscriptionStatus[]) => {
-    clear(list);
-    for (const row of rows) {
+    preserveScroll(list, () => {
+      clear(list);
+      for (const row of rows) {
       const p = providerDef(row.provider);
       const sw = toggle(row.on, (on) => {
         void Bridge.subscriptionSet(row.provider, on).then((next) => {
           if (next) draw(next);
         });
       });
-      const lines: HTMLElement[] = [];
+      const info = h("div", { class: "setting-info" },
+        h("div", { class: "setting-title" },
+          h("i", { class: "dot", style: `background:${p.accent}` }),
+          h("span", { text: SUBSCRIPTION_NAMES[row.provider] ?? p.name }),
+        ),
+      );
       if (row.installed) {
-        lines.push(h("div", { class: "hint", style: "color:#22c55e", text: t("{tool} found ✓", { tool: row.tool }) }));
-        lines.push(h("div", {
-          class: "hint",
-          text: t("Not signed in yet? Run this once in a terminal: {command}", { command: row.signIn }),
-        }));
+        info.append(
+          h("div", { class: "setting-desc", style: "color:#22c55e", text: t("{tool} found ✓", { tool: row.tool }) }),
+          h("div", {
+            class: "setting-desc",
+            text: t("Not signed in yet? Run this once in a terminal: {command}", { command: row.signIn }),
+          }),
+        );
       } else {
-        lines.push(h("div", { class: "row" },
-          h("span", { class: "hint", text: t("{tool} not found.", { tool: row.tool }) }),
-          h("span", { class: "spacer" }),
-          h("button", { text: t("Install it"), onclick: () => void Bridge.openUrl(row.installUrl) }),
-        ));
+        info.append(h("div", { class: "setting-desc", text: t("{tool} not found.", { tool: row.tool }) }));
       }
       if (!row.subscriptionOnly && !row.on) {
-        lines.push(h("div", { class: "hint", text: t("Off: the chat uses your API key below.") }));
+        info.append(h("div", { class: "setting-desc", text: t("Off: the chat uses your API key below.") }));
       }
-      list.append(h("div", { style: "display:flex;flex-direction:column;gap:6px" },
-        h("div", { class: "row" },
-          h("i", { class: "dot", style: `background:${p.accent}` }),
-          h("label", { text: SUBSCRIPTION_NAMES[row.provider] ?? p.name }),
-          h("span", { class: "spacer" }),
-          sw,
-        ),
-        ...lines,
-      ));
+      const controls: HTMLElement[] = row.installed
+        ? [sw]
+        : [h("button", { text: t("Install it"), onclick: () => void Bridge.openUrl(row.installUrl) }), sw];
+      list.append(h("div", { class: "setting-item" }, info, h("div", { class: "setting-control" }, ...controls)));
     }
+    });
   };
   void Bridge.subscriptionStatus().then((rows) => draw(rows ?? []));
   return h(
@@ -495,7 +572,7 @@ function apiSection(hasKey: boolean, relay: boolean): HTMLElement {
     {},
     h("h2", {}, dot, h("span", { text: "Claude" })),
     state,
-    h("div", { class: "row" }, h("label", { text: t("API key") }), field, saveBtn, clearBtn),
+    h("div", { class: "row" }, h("label", { text: t("API key") }), secretField(field), saveBtn, clearBtn),
     model.element,
     feedback,
   );
@@ -530,6 +607,44 @@ function activePillsSection(connected: Record<string, boolean>): HTMLElement {
     return null;
   }
 
+  function airadoroControls(): HTMLElement {
+    const workM = loadStoredMinutes(AIRADORO_STORAGE_WORK, DEFAULT_WORK_MINUTES);
+    const restM = loadStoredMinutes(AIRADORO_STORAGE_REST, DEFAULT_REST_MINUTES);
+
+    const workInput = h("input", {
+      type: "number",
+      min: "1",
+      max: "60",
+      value: String(workM),
+      style: "width:52px;text-align:center",
+    }) as HTMLInputElement;
+
+    const restInput = h("input", {
+      type: "number",
+      min: "1",
+      max: "60",
+      value: String(restM),
+      style: "width:52px;text-align:center",
+    }) as HTMLInputElement;
+
+    workInput.addEventListener("change", () => {
+      saveStoredMinutes(AIRADORO_STORAGE_WORK, parseInt(workInput.value, 10));
+    });
+
+    restInput.addEventListener("change", () => {
+      saveStoredMinutes(AIRADORO_STORAGE_REST, parseInt(restInput.value, 10));
+    });
+
+    return h("div", { class: "row", style: "align-items:center;gap:8px;padding:4px 0 6px 20px" },
+      h("label", { style: "min-width:auto;color:var(--dim-2);font-size:12px", text: t("Work") }),
+      workInput,
+      h("span", { style: "font-size:11px;color:var(--dim-2)", text: t("min") }),
+      h("label", { style: "min-width:auto;margin-left:14px;color:var(--dim-2);font-size:12px", text: t("Rest") }),
+      restInput,
+      h("span", { style: "font-size:11px;color:var(--dim-2)", text: t("min") }),
+    );
+  }
+
   function row(def: PillDefinition): HTMLElement {
     const isMain = def.id === settings.mainPill;
     const on = settings.activeIntegrations.includes(def.id);
@@ -553,21 +668,25 @@ function activePillsSection(connected: Record<string, boolean>): HTMLElement {
       declaredChanged();
     });
     el.append(sw);
+    if (def.id === "integration_airadoro") {
+      return h("div", { style: "display:flex;flex-direction:column" }, el, airadoroControls());
+    }
     return el;
   }
 
   function draw() {
-    const used = settings.activeIntegrations.length;
-    slots.textContent = t("{used}/{max} slots in use — the main tool doesn't take one.", { used, max: MAX_ACTIVE });
-    slots.classList.toggle("full", used >= MAX_ACTIVE);
-    main.value = settings.mainPill;
-    clear(groups);
-    for (const cat of PILL_CATEGORIES) {
-      if (cat.id === "service") continue;
-      const pills = availablePills().filter((p) => p.category === cat.id);
-      if (pills.length === 0) continue;
-      groups.append(h("div", { class: "pill-group" }, h("h3", { text: t(cat.title) }), ...pills.map(row)));
-    }
+    preserveScroll(groups, () => {
+      const used = settings.activeIntegrations.length;
+      slots.textContent = t("{used}/{max} slots in use — the main tool doesn't take one.", { used, max: MAX_ACTIVE });
+      slots.classList.toggle("full", used >= MAX_ACTIVE);
+      main.value = settings.mainPill;
+      clear(groups);
+      for (const cat of PILL_CATEGORIES) {
+        const pills = availablePills().filter((p) => p.category === cat.id);
+        if (pills.length === 0) continue;
+        groups.append(h("div", { class: "pill-group" }, h("h3", { text: t(cat.title) }), ...pills.map(row)));
+      }
+    });
   }
   declaredViews.push(draw);
   draw();
@@ -625,7 +744,7 @@ function chatProvidersSection(
   present: Record<string, boolean>,
   keyChanged: (key: string, on: boolean) => void,
 ): HTMLElement {
-  const list = h("div", { style: "display:flex;flex-direction:column;gap:8px" });
+  const list = h("div", { class: "setting-list" });
   for (const def of CLOUD) {
     const p = providerDef(def.id);
     const key = p.key!;
@@ -671,14 +790,16 @@ function chatProvidersSection(
     });
     refresh();
     list.append(
-      h("div", { class: "row" },
-        h("label", {},
-          h("i", { class: "dot", style: `background:${p.accent};margin-right:8px` }),
-          h("span", { text: def.name }),
+      h("div", { class: "setting-item" },
+        h("div", { class: "setting-info" },
+          h("div", { class: "setting-title" },
+            h("i", { class: "dot", style: `background:${p.accent}` }),
+            h("span", { text: def.name }),
+          ),
+          h("div", { class: "setting-desc", text: t("Key from {site}", { site: def.where }) }),
         ),
-        input, saveBtn, removeBtn, dotEl,
+        h("div", { class: "setting-control wide" }, input, saveBtn, removeBtn, dotEl),
       ),
-      h("div", { class: "hint", style: "margin:-4px 0 0 144px", text: t("Key from {site}", { site: def.where }) }),
     );
   }
   return h(
@@ -721,7 +842,7 @@ function exposureNotice(url: string, withKey: boolean): HTMLElement | null {
 }
 
 function localSection(customKey: boolean): HTMLElement {
-  const body = h("div", { style: "display:flex;flex-direction:column;gap:14px" });
+  const body = h("div", { class: "setting-list" });
   const section = h(
     "section",
     {},
@@ -745,7 +866,7 @@ function localSection(customKey: boolean): HTMLElement {
       h("i", { class: "dot", style: `background:${p.accent};margin-right:8px` }),
       h("span", { text: t(def.name) }),
     );
-    const block = h("div", { style: "display:flex;flex-direction:column;gap:6px" });
+    const block = h("div", { class: "setting-block" });
 
     if (connected) {
       const inUse = settings.chatProvider === id;
@@ -952,7 +1073,7 @@ function integrationsSection(present: Record<string, boolean>): HTMLElement {
       rows.append(
         h("div", { class: "row" },
           h("label", { style: "min-width:104px", text: t(field.label) }),
-          input, saveBtn, dotEl,
+          field.secret ? secretField(input) : input, saveBtn, dotEl,
         ),
       );
     }
@@ -1012,13 +1133,24 @@ function whatsappSections(): HTMLElement[] {
  */
 let generalSync: (() => void) | null = null;
 
-function generalSection(): HTMLElement {
+function settingItem(title: string, desc: string | null, ...controls: HTMLElement[]): HTMLElement {
+  const info = h("div", { class: "setting-info" }, h("div", { class: "setting-title", text: title }));
+  if (desc) info.append(h("div", { class: "setting-desc", text: desc }));
+  return h("div", { class: "setting-item" }, info, h("div", { class: "setting-control" }, ...controls));
+}
+
+function generalSections(): HTMLElement[] {
+  const volumePercent = h("span", {
+    style: "font-size:11.5px;color:var(--dim);min-width:38px;text-align:right",
+    text: `${Math.round((settings.soundVolume / 0.2) * 100)}%`,
+  });
   const volume = h("input", {
     type: "range", min: "0", max: "0.2", step: "0.005",
     value: String(settings.soundVolume),
   }) as HTMLInputElement;
   volume.addEventListener("input", () => {
     settings.soundVolume = Number(volume.value);
+    volumePercent.textContent = `${Math.round((settings.soundVolume / 0.2) * 100)}%`;
     void save();
   });
 
@@ -1039,13 +1171,40 @@ function generalSection(): HTMLElement {
   const autoClose = h("input", {
     type: "number", min: "5", max: "120", step: "1",
     value: String(Math.round(settings.autoCloseInterval)),
-    style: "width:72px",
+    style: "width:64px;text-align:center",
   }) as HTMLInputElement;
   autoClose.addEventListener("change", () => {
     settings.autoCloseInterval = Math.max(5, Math.min(120, Number(autoClose.value) || 15));
     autoClose.value = String(settings.autoCloseInterval);
     void save();
+    updateAutoCloseChips();
   });
+
+  const autoCloseChips = h("div", { class: "preset-chips" });
+  const chipButtons: { sec: number; el: HTMLElement }[] = [];
+  function updateAutoCloseChips() {
+    const cur = settings.autoCloseInterval;
+    for (const { sec, el } of chipButtons) {
+      el.classList.toggle("on", sec === cur);
+    }
+  }
+
+  for (const sec of [5, 15, 30, 60]) {
+    const chip = h("button", {
+      type: "button",
+      class: "preset-chip",
+      text: `${sec}s`,
+      onclick: () => {
+        settings.autoCloseInterval = sec;
+        autoClose.value = String(sec);
+        void save();
+        updateAutoCloseChips();
+      },
+    });
+    chipButtons.push({ sec, el: chip });
+    autoCloseChips.append(chip);
+  }
+  updateAutoCloseChips();
 
   // The closed island (core/closed.ts): what stays at the top of the screen.
   const closed = h("select", {}) as HTMLSelectElement;
@@ -1090,6 +1249,45 @@ function generalSection(): HTMLElement {
     void save();
   });
 
+  const positionCtrl = segmentedControl(
+    [
+      ["top", t("Top center")],
+      ["topLeft", t("Top left")],
+      ["topRight", t("Top right")],
+    ],
+    settings.islandPosition || "top",
+    (val) => {
+      settings.islandPosition = val;
+      void save();
+    },
+  );
+
+  const scaleCtrl = segmentedControl(
+    [
+      ["compact", t("Compact (90%)")],
+      ["normal", t("Standard (100%)")],
+      ["large", t("Large (110%)")],
+    ],
+    settings.islandScale || "normal",
+    (val) => {
+      settings.islandScale = val;
+      void save();
+    },
+  );
+
+  const styleCtrl = segmentedControl(
+    [
+      ["solid", t("OLED Black (Solid)")],
+      ["glass", t("Acrylic Glass")],
+      ["translucent", t("Translucent")],
+    ],
+    settings.islandStyle || "solid",
+    (val) => {
+      settings.islandStyle = val;
+      void save();
+    },
+  );
+
   const sound = toggle(settings.soundEnabled, (v) => { settings.soundEnabled = v; void save(); });
   const openOnHover = toggle(settings.openOnHover, (v) => { settings.openOnHover = v; void save(); });
   const autostart = toggle(settings.autostart, (v) => { settings.autostart = v; void save(); });
@@ -1097,63 +1295,95 @@ function generalSection(): HTMLElement {
     setSwitch(sound, settings.soundEnabled);
     setSwitch(openOnHover, settings.openOnHover);
     setSwitch(autostart, settings.autostart);
+    positionCtrl.setValue(settings.islandPosition || "top");
+    scaleCtrl.setValue(settings.islandScale || "normal");
+    styleCtrl.setValue(settings.islandStyle || "solid");
     // A field being edited keeps what is in it; it catches up when it is left.
-    if (document.activeElement !== volume) volume.value = String(settings.soundVolume);
+    if (document.activeElement !== volume) {
+      volume.value = String(settings.soundVolume);
+      volumePercent.textContent = `${Math.round((settings.soundVolume / 0.2) * 100)}%`;
+    }
     if (document.activeElement !== autoClose) {
       autoClose.value = String(Math.round(settings.autoCloseInterval));
+      updateAutoCloseChips();
     }
   };
   volume.addEventListener("blur", () => generalSync?.());
   autoClose.addEventListener("blur", () => generalSync?.());
 
-  return h(
-    "section",
-    {},
-    h("h2", {}, h("span", { text: t("General") })),
-    h("div", { class: "row" },
-      h("label", { text: t("Sound") }),
-      sound,
-      volume,
-    ),
-    h("div", { class: "row" }, soundsFolder, reloadSounds, customCount),
-    h("div", { class: "hint", text: t("Drop a file named like one of Mochi's sounds (finish.wav, approval.mp3, greet.m4a…) in the sounds folder to replace it, then Reload.") }),
-    h("div", { class: "row" },
-      h("label", { text: t("Open on hover") }),
+  const card = (heading: string, ...items: HTMLElement[]) =>
+    h("section", {}, h("h2", {}, h("span", { text: heading })), h("div", { class: "setting-list" }, ...items));
+
+  const generalCard = card(
+    t("General"),
+    languageRow(),
+    settingItem(t("Launch at startup"), null, autostart),
+  );
+
+  const behaviorCard = card(
+    t("Behavior"),
+    settingItem(
+      t("Open on hover"),
+      t("Hovering the island opens it; it folds again shortly after the pointer leaves. Click inside to keep it open."),
       openOnHover,
     ),
-    h("div", { class: "hint", text: t("Hovering the island opens it; it folds again shortly after the pointer leaves. Click inside to keep it open.") }),
-    h("div", { class: "row" },
-      h("label", { text: t("Open for every pill’s alerts") }),
+    settingItem(
+      t("Open for every pill’s alerts"),
+      t("When a pill other than the one shown finishes or hits an error, the notch shows it for a moment, then the pill you had comes back."),
       toggle(settings.alertsFromAllPills, (v) => { settings.alertsFromAllPills = v; void save(); }),
     ),
-    h("div", { class: "hint", text: t("When a pill other than the one shown finishes or hits an error, the notch shows it for a moment, then the pill you had comes back.") }),
-    h("div", { class: "row" },
-      h("label", { text: t("Show clock in the island") }),
-      toggle(settings.showClock, (v) => { settings.showClock = v; void save(); }),
+    settingItem(
+      t("Auto-close"),
+      t("seconds after you leave the island"),
+      autoCloseChips,
+      autoClose,
     ),
-    h("div", { class: "hint", text: t("The date and the time in the middle of the island when it is compact.") }),
-    h("div", { class: "row" },
-      h("label", { text: t("Closed island shows") }),
+  );
+
+  const displayCard = card(
+    t("Display"),
+    settingItem(t("Island lives on"), null, screen),
+    settingItem(
+      t("Island position"),
+      t("Where the island sits at the top of the screen."),
+      positionCtrl.element,
+    ),
+    settingItem(
+      t("Island scale"),
+      t("The size of the island."),
+      scaleCtrl.element,
+    ),
+    settingItem(
+      t("Visual style"),
+      t("Background appearance and glass blur effect."),
+      styleCtrl.element,
+    ),
+    settingItem(
+      t("Closed island shows"),
+      t("A PC has no notch: once closed, a small island stays at the top of the screen. Hover it to bring Aira back. Hidden, move the pointer to the very top of the screen."),
       closed,
     ),
-    h("div", { class: "hint", text: t("A PC has no notch: once closed, a small island stays at the top of the screen. Hover it to bring Aira back. Hidden, move the pointer to the very top of the screen.") }),
-    h("div", { class: "row" },
-      h("label", { text: t("Auto-close") }),
-      autoClose,
-      h("span", { class: "hint", text: t("seconds after you leave the island") }),
+    settingItem(
+      t("Show clock in the island"),
+      t("The date and the time in the middle of the island when it is compact."),
+      toggle(settings.showClock, (v) => { settings.showClock = v; void save(); }),
     ),
-    h("div", { class: "row" },
-      h("label", { text: t("Island lives on") }),
-      screen,
-    ),
-    h("div", { class: "row" },
-      h("label", { text: t("Launch at startup") }),
-      autostart,
-    ),
-    ...recapRows(),
-    ...updateRows(toggle, version),
-    languageRow(),
   );
+
+  const soundCard = card(
+    t("Sound"),
+    settingItem(t("Sound"), null, sound, volume, volumePercent),
+    settingItem(
+      t("Open sounds folder"),
+      t("Drop a file named like one of Mochi's sounds (finish.wav, approval.mp3, greet.m4a…) in the sounds folder to replace it, then Reload."),
+      customCount, soundsFolder, reloadSounds,
+    ),
+  );
+
+  const recapCard = card(t("Weekly recap"), ...recapRows());
+  const updatesCard = card(t("Updates"), ...updateRows(toggle, version));
+
+  return [generalCard, behaviorCard, displayCard, soundCard, recapCard, updatesCard];
 }
 
 /**
@@ -1171,7 +1401,7 @@ function languageRow(): HTMLElement {
     void save();
     applyLanguage();
   });
-  return h("div", { class: "row" }, h("label", { text: t("Language") }), select);
+  return settingItem(t("Language"), null, select);
 }
 
 // ── Shortcuts section ─────────────────────────────────────────────────────────
@@ -1417,20 +1647,8 @@ function recapRows(): HTMLElement[] {
     },
   }) as HTMLButtonElement;
   return [
-    h("div", { class: "row" },
-      h("label", { text: T.label }),
-      sw,
-      h("span", { class: "hint", text: T.keep }),
-    ),
-    h("div", { class: "row" },
-      h("label", {}),
-      clearBtn,
-      feedback,
-    ),
-    h("div", { class: "row" },
-      h("label", {}),
-      h("span", { class: "hint", style: "flex:1 1 0;min-width:0", text: T.about }),
-    ),
+    settingItem(T.keep, T.about, sw),
+    settingItem(T.clear, null, feedback, clearBtn),
   ];
 }
 
@@ -1539,7 +1757,7 @@ async function render() {
   generalSync = null;
   clear(root);
   const sections: Partial<Record<PageId, () => HTMLElement[]>> = {
-    general: () => [generalSection()],
+    general: () => generalSections(),
     pills: () => [activePillsSection(connected)],
     agents: () => [claudeSection(status), agentsSection(agents), planSection(status)],
     chat: () => [subscriptionsSection(), apiSection(hasKey, claudeRelay), chatProvidersSection(chatKeys, keyChanged), localSection(customKey)],
