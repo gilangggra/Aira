@@ -7,7 +7,7 @@ import {
   CLOSED_BOT_D, CLOSED_H, closedContent, closedIsland, closedWidth, type ClosedContent,
 } from "../core/closed";
 import {
-  CHAT_OVERLAY_H, EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
+  CHAT_OVERLAY_H, COMPACT_W, EXPANDED_CORNER, EXPANDED_W, NOTCH_H, NOTCH_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
   islandSize,
   QUESTION_PICKER_H,
@@ -15,17 +15,18 @@ import {
 } from "../core/layout";
 import { Sound } from "../core/sound";
 import { State } from "../core/state";
-import { SPOTIFY_ID, Spotify, islandDances } from "../core/spotify";
+import { SPOTIFY_ID, Spotify, currentArtwork, isAd, islandDances, spotifyPosition } from "../core/spotify";
+import { SpotifyLyrics, activeLyricLine } from "../core/lyrics";
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
-import { createMiniBot, pruneMiniBots, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
+import { syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
 import { SeasonCache, parseOutfit } from "../mochi/wardrobe";
 import { UploadCanvas } from "../upload/canvas";
 import { USC, UploadSeq, uploadProgressCurve } from "../upload/sequence";
 import { dominantPct, planColor } from "../core/plan";
-import { dueAgendaReminders, loadAgendaTasks, markReminderNotified, pendingCountForDate } from "../core/agenda";
+import { dueAgendaReminders, loadAgendaTasks, markReminderNotified, pendingCountForDate, tasksForDay } from "../core/agenda";
 import { dayKey } from "../core/calendar";
-import { Weather, WEATHER_TTL_SEC, aqiInfo, formatTemp, upcomingRainPeak, wmoCondition } from "../core/weather";
+import { Weather, WEATHER_TTL_SEC, resolveDayPhase, wmoCondition } from "../core/weather";
 import { Clipboard } from "../core/clipboard";
 import { AIRADORO_ID, AiradoroEngine } from "../core/airadoro";
 import { Airadoro } from "./airadoro";
@@ -33,7 +34,6 @@ import { language, t, tl } from "../i18n/i18n";
 import { claudeCompactPillVisible, closePlanCard, openPlanColor, planCardOpen } from "../views/usage";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
 import { h } from "../views/dom";
-import { buildMiniWeatherIcon } from "../views/weather-art";
 import { buildSessionDropList, type SessionDropList } from "../views/session-drop";
 import { DROP_TEXT_RIGHT_WITH_LIST, dropTargetAt, dropTargets } from "../core/launch";
 import { IslandStateMachine } from "./fsm";
@@ -55,6 +55,12 @@ const HIT_MARGIN = 14;
 
 /** The views with a text field: the island takes the keyboard while one is on. */
 const TYPING_VIEWS: ReadonlySet<IslandViewName> = new Set(["prompt", "launch", "agenda", "clipboard"]);
+
+/** Modal/alert views where the bottom navigation dock steps aside so card actions fill cleanly. */
+const DOCK_HIDDEN_VIEWS: ReadonlySet<IslandViewName> = new Set([
+  "greeting", "upload", "uploading", "choose", "approval", "question",
+  "error", "finished", "confused", "note", "update", "whatsNew", "reminder",
+]);
 
 /** The three views the drop sequence owns; leaving them stops the engine. */
 const UPLOAD_VIEWS: ReadonlySet<IslandViewName> = new Set(["upload", "uploading", "choose"]);
@@ -104,13 +110,22 @@ export class Island {
   private compactWeatherIcon!: HTMLElement;
   private compactWeatherLabel!: HTMLElement;
   private compactWeatherDot!: HTMLElement;
-  private compactWeatherIconKey = "";
   private compactAiradoro!: HTMLElement;
   private compactAiradoroLabel!: HTMLElement;
   private compactAiradoroTimer: number | null = null;
+  private compactBotCx = 24;
+  private compactGridH = 16;
+  private compactTargetW = COMPACT_W;
+  private compactTargetH = 34;
+  private compactLyric!: HTMLElement;
+  private compactLyricText!: HTMLElement;
+  private compactLyricTimer: number | null = null;
   private wakeStrip!: HTMLElement;
+  private musicBackdrop!: HTMLElement;
+  private musicBackdropImg!: HTMLImageElement;
+  private weatherBackdrop!: HTMLElement;
 
-  private header!: ViewHost;
+  private header!: ViewHost & { dockEl?: HTMLElement };
   private views!: Map<IslandViewName, ViewHost>;
   private uploadCanvas!: UploadCanvas;
   /** The sessions listed on the drop card while a file is over it. */
@@ -454,12 +469,34 @@ export class Island {
       h("i", { class: "compact-airadoro-dot" }),
       this.compactAiradoroLabel,
     );
+    this.compactLyricText = h("span", { class: "compact-lyric-text" });
+    this.compactLyric = h(
+      "button",
+      {
+        id: "compact-lyric",
+        title: tl("Lyrics"),
+        onmousedown: (e) => {
+          e.stopPropagation();
+        },
+        onclick: (e) => {
+          e.stopPropagation();
+          const me = e as MouseEvent;
+          if (me.button === 0) {
+            Sound.play("click");
+            State.setFocus(SPOTIFY_ID);
+            this.expand("music");
+          }
+        },
+      },
+      h("i", { class: "compact-lyric-note", text: "♪" }),
+      this.compactLyricText,
+    );
 
     this.header = buildHeader(actions);
     this.views = buildViews(actions, () => this.animateGeometry(false));
     this.viewsEl = h("div", { id: "views" });
     for (const v of this.views.values()) this.viewsEl.append(v.el);
-    this.contentEl = h("div", { id: "content" }, this.header.el, this.viewsEl);
+    this.contentEl = h("div", { id: "content" }, this.header.el, this.viewsEl, this.header.dockEl);
 
     // The drop sequence draws the card, the bar and its own Mochi. It sits under
     // the header, which stays visible on top of it exactly as on macOS.
@@ -475,9 +512,21 @@ export class Island {
     this.sessionDrop = buildSessionDropList();
     this.uploadCanvas.el.append(this.sessionDrop.el);
 
+    this.musicBackdropImg = h("img", { class: "music-backdrop-art", alt: "", draggable: "false" }) as HTMLImageElement;
+    this.musicBackdrop = h(
+      "div",
+      { class: "music-backdrop" },
+      this.musicBackdropImg,
+      h("div", { class: "music-backdrop-fallback" }),
+      h("div", { class: "music-backdrop-vignette" }),
+    );
+    this.weatherBackdrop = h("div", { class: "weather-backdrop" });
+
     this.clipEl = h(
       "div",
       { id: "island-clip" },
+      this.musicBackdrop,
+      this.weatherBackdrop,
       this.greetingCanvas,
       this.uploadCanvas.el,
       this.contentEl,
@@ -493,6 +542,7 @@ export class Island {
       this.compactAgenda,
       this.compactWeather,
       this.compactAiradoro,
+      this.compactLyric,
       this.clockEl,
       this.closedEl,
       this.countdown,
@@ -553,6 +603,7 @@ export class Island {
   private setMode(mode: IslandMode) {
     const prev = State.mode;
     if (mode === prev) return;
+    if (prev === "compact") this.engine.tgEs = 1;
     State.mode = mode;
     if (mode === "expanded") Sound.play("open");
     if (prev === "expanded") {
@@ -575,6 +626,7 @@ export class Island {
     if (mode === "hidden") this.updateClosed();
     else this.closedEl.classList.remove("on");
     this.scheduleClosedLife();
+    if (mode === "compact") this.applyCompactLayout();
     this.updateWindowCollapsed();
     this.animateGeometry(modeOrder(mode) < modeOrder(prev));
     State.notify();
@@ -978,13 +1030,132 @@ export class Island {
     return closedIsland(State.settings.closedIsland) !== "hidden";
   }
 
+  private currentSyncedLyric(): string | null {
+    const track = Spotify.state.track;
+    if (!State.spotifyPlaying || !track || isAd(track)) return null;
+    return activeLyricLine(SpotifyLyrics.current, spotifyPosition(Spotify.state, Date.now()));
+  }
+
+  private applyCompactLayout() {
+    const hover = this.wasInIsland && State.mode === "compact";
+    const padX = hover ? 18 : 14;
+    const gap = 7;
+    const otherCount = 0; // Mini-grid (mochi on the right) hidden per user request
+    const hasWeather = false; // Weather pill on compact notch hidden per user request
+    const lyric = State.mode === "compact" ? this.currentSyncedLyric() : null;
+    const hasLyric = Boolean(lyric);
+    const hasClock = State.settings.showClock && !hasLyric;
+    const hasAiradoro = Airadoro.snapshot.phase !== "idle";
+    const pendingToday = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
+    const hasAgenda = pendingToday > 0;
+    const hasPlan = claudeCompactPillVisible();
+
+    const gridW = otherCount === 0 ? 0 : otherCount === 1 ? 16 : 30;
+    const gridH = otherCount === 0 ? 0 : otherCount <= 2 ? 16 : 30;
+    this.compactGridH = gridH;
+
+    // Left cluster: Mochi + Weather pill + optional Clock / Lyrics.
+    let leftCursor = padX;
+    this.compactBotCx = leftCursor + 24;
+    leftCursor = this.compactBotCx + 16;
+
+    if (hasWeather) {
+      this.compactWeather.style.left = `${leftCursor}px`;
+      leftCursor += Math.max(48, Math.ceil(this.compactWeather.offsetWidth || 56)) + gap;
+    }
+
+    // Measure right cluster widths (from right edge inward).
+    const airaW = hasAiradoro ? Math.max(48, Math.ceil(this.compactAiradoro.offsetWidth || 56)) : 0;
+    const agendaW = hasAgenda ? Math.max(30, Math.ceil(this.compactAgenda.offsetWidth || 34)) : 0;
+    const planW = hasPlan ? Math.max(36, Math.ceil(this.compactPlan.offsetWidth || 42)) : 0;
+    const clockW = hasClock ? Math.max(76, Math.ceil(this.clockEl.scrollWidth || 88)) : 0;
+    const lyricW = hasLyric ? Math.max(120, Math.min(200, Math.ceil(this.compactLyricText.scrollWidth + 24 || 150))) : 0;
+
+    let rightNeeded = padX;
+    if (gridW > 0) rightNeeded += gridW + gap;
+    if (hasPlan) rightNeeded += planW + gap;
+    if (hasAgenda) rightNeeded += agendaW + gap;
+    if (hasAiradoro) rightNeeded += airaW + gap;
+
+    const centerNeeded = hasLyric ? lyricW + gap * 2 : hasClock ? clockW + gap * 2 : 0;
+    const minNeededW = leftCursor + centerNeeded + rightNeeded;
+    const baseW = Math.max(hasLyric ? 396 : COMPACT_W, Math.round(minNeededW));
+    const w = hover ? baseW + 24 : baseW;
+    const h = (otherCount >= 3 ? 38 : NOTCH_H) + (hover ? 2 : 0);
+
+    // Anchor right-side indicators cleanly from the right edge of the capsule.
+    let rightEdge = w - padX;
+    if (otherCount > 0) {
+      rightEdge -= gridW;
+      this.miniGrid.style.left = `${rightEdge}px`;
+      this.miniGrid.style.width = `${gridW}px`;
+      this.miniGrid.style.height = `${gridH}px`;
+      rightEdge -= gap;
+    }
+    if (hasPlan) {
+      rightEdge -= planW;
+      this.compactPlan.style.left = `${rightEdge}px`;
+      rightEdge -= gap;
+    }
+    if (hasAgenda) {
+      rightEdge -= agendaW;
+      this.compactAgenda.style.left = `${rightEdge}px`;
+      rightEdge -= gap;
+    }
+    if (hasAiradoro) {
+      rightEdge -= airaW;
+      this.compactAiradoro.style.left = `${rightEdge}px`;
+      rightEdge -= gap;
+    }
+
+    if (hasLyric) {
+      this.compactLyric.style.left = `${leftCursor}px`;
+      this.compactLyric.style.right = `${Math.max(padX, w - rightEdge)}px`;
+    } else if (hasClock) {
+      const availCenter = Math.max(leftCursor, (w - clockW) / 2);
+      const maxLeft = rightEdge - clockW;
+      this.clockEl.style.left = `${Math.min(availCenter, Math.max(leftCursor, maxLeft))}px`;
+      this.clockEl.style.width = `${clockW}px`;
+    }
+
+    this.compactTargetW = w;
+    this.compactTargetH = h;
+  }
+
   private targetSize(): { w: number; h: number; r: number } {
     if (State.mode === "hidden" && this.closedShows) {
       return { w: this.closedW, h: CLOSED_H, r: 13 };
     }
+    if (State.mode === "compact") {
+      return { w: this.compactTargetW, h: this.compactTargetH, r: ROUNDED_CORNER };
+    }
     let { w, h } = islandSize(State.mode, State.view, State.chatHistory.length);
+    if (State.mode === "expanded") {
+      w = EXPANDED_W;
+      if (State.view === "prompt") {
+        h = Math.max(308, Math.min(362, this.chatHeight));
+      } else if (State.view === "overview") {
+        const overviewEl = this.views.get("overview")?.el;
+        const inDetail = planCardOpen() || Boolean(overviewEl?.classList.contains("is-detail"));
+        if (inDetail) {
+          h = 288;
+        } else {
+          const hasAgents = State.tasks.some((t) => t.id !== SPOTIFY_ID && t.id !== AIRADORO_ID);
+          h = hasAgents ? 320 : 302;
+        }
+      } else if (State.view === "empty") {
+        const hasAgents = State.tasks.some((t) => t.id !== SPOTIFY_ID && t.id !== AIRADORO_ID);
+        h = hasAgents ? 316 : 300;
+      } else if (State.view === "clipboard") {
+        const clips = Clipboard.entries.length;
+        h = Math.max(264, Math.min(316, 204 + clips * 36));
+      } else if (State.view === "agenda") {
+        const tasksToday = tasksForDay(loadAgendaTasks(), dayKey(new Date())).length;
+        h = Math.max(292, Math.min(324, 256 + tasksToday * 22));
+      }
+    }
     if (State.mode === "expanded" && State.view === "question" && State.pendingApproval?.questions) {
-      h = QUESTION_PICKER_H;
+      h = Math.max(h, QUESTION_PICKER_H);
     } else if (State.mode === "expanded" && State.view === "prompt" && State.chatOverlay !== "none") {
       h = Math.max(h, CHAT_OVERLAY_H);
     }
@@ -1011,41 +1182,57 @@ export class Island {
     return s === "compact" ? 0.9 : s === "large" ? 1.1 : 1.0;
   }
 
+  private get isFloatingIsland(): boolean {
+    return (State.settings.islandShape || "notch") === "island";
+  }
+
   private applyGeometry() {
     const scale = this.getScale();
     const w = this.width.value;
     const hh = this.height.value;
     const r = this.radius.value;
+    const floating = this.isFloatingIsland;
+    const topOffset = floating && hh > 0 ? 6 : 0;
+    this.islandEl.style.top = `${topOffset}px`;
     this.islandEl.style.width = `${w}px`;
     this.islandEl.style.height = `${hh}px`;
-    this.islandEl.style.borderRadius = `0 0 ${r}px ${r}px`;
+    this.islandEl.style.borderRadius = floating
+      ? State.mode === "expanded"
+        ? `${r}px`
+        : "999px"
+      : `0 0 ${r}px ${r}px`;
     this.islandEl.style.transformOrigin = `top center`;
     this.islandEl.style.transform = `translateX(-50%) scale(${scale})`;
-    const ear = hh > 2 ? Math.max(0, Math.min(12, hh * 0.45, r * 0.85)) : 0;
+    const ear = !floating && hh > 2 ? Math.max(0, Math.min(12, hh * 0.45, r * 0.85)) : 0;
     this.islandEl.style.setProperty("--ear", `${ear.toFixed(2)}px`);
     // These follow the island as it resizes, so they belong here rather than in
     // the state-driven DOM sync.
-    this.miniGrid.style.left = `${w - 40 - 14.5}px`;
-    this.miniGrid.style.top = `${hh / 2 - 14.5}px`;
+    this.miniGrid.style.top = `${Math.max(0, (hh - this.compactGridH) / 2)}px`;
     this.clockEl.style.height = `${hh}px`;
     this.greetingCanvas.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.uploadCanvas.el.style.left = `${(w - EXPANDED_W) / 2}px`;
 
     const rect = this.islandRect();
     const p = this.pushedRect;
-    if (Math.abs(p.x - rect.x) > 0.5 || Math.abs(p.w - rect.w) > 0.5 || Math.abs(p.h - rect.h) > 0.5) {
+    if (
+      Math.abs(p.x - rect.x) > 0.5 ||
+      Math.abs(p.y - rect.y) > 0.5 ||
+      Math.abs(p.w - rect.w) > 0.5 ||
+      Math.abs(p.h - rect.h) > 0.5
+    ) {
       this.pushedRect = rect;
       void Bridge.setIslandRect(rect.x, rect.y, rect.w, rect.h);
     }
   }
 
-  /** Island rect in window coordinates (origin top-left of the 720×320 window). */
+  /** Island rect in window coordinates (origin top-left of the 720×380 window). */
   private islandRect(): { x: number; y: number; w: number; h: number } {
     const scale = this.getScale();
     const w = this.width.value * scale;
     const hh = this.height.value * scale;
+    const topOffset = this.isFloatingIsland && hh > 0 ? 6 * scale : 0;
     const viewportW = window.innerWidth > 0 ? window.innerWidth : PANEL_W;
-    return { x: (viewportW - w) / 2, y: 0, w, h: hh };
+    return { x: (viewportW - w) / 2, y: topOffset, w, h: hh };
   }
 
   // ── Window collapse (hidden → tiny wake strip, zero polling) ────────────────
@@ -1114,7 +1301,7 @@ export class Island {
       : { w: 0, h: 0 };
     if (!force && size.w === this.collapsedTo.w && size.h === this.collapsedTo.h) return;
     this.collapsedTo = size;
-    if (size.w > 0) void Bridge.setCollapsed(true, size.w + 24, size.h);
+    if (size.w > 0) void Bridge.setCollapsed(true, size.w + 24, size.h + (this.isFloatingIsland ? 10 : 0));
     else void Bridge.setCollapsed(true);
   }
 
@@ -1132,6 +1319,7 @@ export class Island {
         locale: language(),
         planUsage: State.planUsage,
         music: State.spotifyPlaying && track ? { title: track.title, artist: track.artist } : null,
+        lyric: this.currentSyncedLyric(),
       })
       : null;
     const key = content ? `${style}|${content.text}|${content.dot ?? ""}|${content.note}` : style;
@@ -1297,9 +1485,20 @@ export class Island {
     if (inIsland && !wasIn) {
       if (this.fsm.state === "coucou") this.greeting.hover();
       this.fsm.mouseEntered();
+      if (State.mode === "compact") {
+        this.engine.blink();
+        this.engine.tgEs = 1.05;
+        this.applyCompactLayout();
+        this.animateGeometry(false);
+      }
     }
     if (!inIsland && wasIn) {
       this.fsm.mouseLeft();
+      if (State.mode === "compact") {
+        this.engine.tgEs = 1;
+        this.applyCompactLayout();
+        this.animateGeometry(true);
+      }
     }
 
     // Bot hover → love
@@ -1457,8 +1656,8 @@ export class Island {
       ? settling || (closedIsland(State.settings.closedIsland) === "mochi" &&
         (botMoving || nowMs < this.closedAwakeUntil))
       : settling ||
-        !this.botCx.settled || !this.botCy.settled || !this.botSize.settled ||
-        greetingActive || this.engine.busy || UploadSeq.isActive || viewAnimating;
+      !this.botCx.settled || !this.botCy.settled || !this.botSize.settled ||
+      greetingActive || this.engine.busy || UploadSeq.isActive || viewAnimating;
 
     if (busy) {
       requestAnimationFrame(this.frame);
@@ -1470,6 +1669,11 @@ export class Island {
 
   private updateBotTargets() {
     let p = botPosition(State.mode, State.view, this.height.value, State.uploadProgress);
+    if (State.mode === "compact") {
+      p = { cx: this.compactBotCx, cy: this.compactTargetH / 2, diameter: 20, opacity: 1 };
+    } else if (State.mode === "expanded" && VIEW_LAYOUTS[State.view].botY === 19) {
+      p = { ...p, cx: this.width.target / 2 };
+    }
     // The closed island with Mochi in it, as on a Mac without a notch.
     if (State.mode === "hidden" && closedIsland(State.settings.closedIsland) === "mochi") {
       p = { cx: this.width.value / 2, cy: this.height.value / 2, diameter: CLOSED_BOT_D, opacity: 1 };
@@ -1611,16 +1815,54 @@ export class Island {
   // ── DOM sync ────────────────────────────────────────────────────────────────
 
   private syncDom() {
-    this.islandEl.dataset.style = State.settings.islandStyle || "solid";
+    this.islandEl.dataset.style = State.settings.islandStyle || "glass";
+    this.islandEl.dataset.shape = State.settings.islandShape || "notch";
     const expanded = State.mode === "expanded";
     const greetingActive = expanded && State.view === "greeting";
 
     const live = expanded && !greetingActive;
+    const showDock = live && !this.uploadActive && !DOCK_HIDDEN_VIEWS.has(State.view);
+    const musicHeroOn = live && State.view === "music" && !this.uploadActive && Spotify.state.track != null;
+    this.islandEl.dataset.music = musicHeroOn ? "on" : "off";
+    this.musicBackdrop.classList.toggle("on", musicHeroOn);
+    if (musicHeroOn) {
+      const cover = currentArtwork(Spotify.state);
+      if (cover) {
+        if (this.musicBackdropImg.getAttribute("src") !== cover) this.musicBackdropImg.setAttribute("src", cover);
+        this.musicBackdrop.classList.add("has-art");
+      } else {
+        this.musicBackdrop.classList.remove("has-art");
+        this.musicBackdropImg.removeAttribute("src");
+      }
+    }
+
+    const weatherHeroOn = live && State.view === "weather" && !this.uploadActive;
+    this.islandEl.dataset.weather = weatherHeroOn ? "on" : "off";
+    this.weatherBackdrop.classList.toggle("on", weatherHeroOn);
+    if (weatherHeroOn) {
+      const snap = Weather.snapshot;
+      if (snap) {
+        const cond = wmoCondition(snap.weatherCode, snap.isDay);
+        const phase = resolveDayPhase(snap.isDay, snap.daily[0]?.sunrise, snap.daily[0]?.sunset);
+        this.weatherBackdrop.dataset.mood = cond.kind === "clear" ? (snap.isDay ? "clear-day" : "clear-night") : cond.kind;
+        this.weatherBackdrop.dataset.phase = phase;
+      } else {
+        const hNow = new Date().getHours();
+        const isDayFallback = hNow >= 6 && hNow < 18;
+        this.weatherBackdrop.dataset.mood = isDayFallback ? "clear-day" : "clear-night";
+        this.weatherBackdrop.dataset.phase = resolveDayPhase(isDayFallback);
+      }
+    }
+    this.islandEl.classList.toggle("has-dock", showDock);
     this.contentEl.style.opacity = live ? "1" : "0";
     // While the drop sequence owns the body its buttons are painted on the canvas
     // underneath, so only the header may keep taking clicks up here.
     this.contentEl.style.pointerEvents = live && !this.uploadActive ? "auto" : "none";
     this.header.el.style.pointerEvents = live ? "auto" : "none";
+    if (this.header.dockEl) {
+      this.header.dockEl.style.display = showDock ? "" : "none";
+      this.header.dockEl.style.pointerEvents = showDock ? "auto" : "none";
+    }
     this.greetingCanvas.style.display = greetingActive ? "block" : "none";
 
     // Leaving the greeting, however it ends, lets its sound fade out.
@@ -1650,29 +1892,16 @@ export class Island {
       }
     }
 
-    // Compact mini grid
-    const showGrid = State.mode === "compact";
-    this.miniGrid.style.opacity = showGrid ? "1" : "0";
-    if (showGrid) {
-      const others = State.otherTasks.slice(0, 4);
-      const key = others.map((t) => t.id).join("|");
-      if (this.miniGrid.dataset.key !== key) {
-        this.miniGrid.dataset.key = key;
-        this.miniGrid.replaceChildren();
-        for (const t of others) {
-          this.miniGrid.append(createMiniBot(t, 13));
-        }
-        pruneMiniBots();
-      }
-    }
+    // Compact mini grid: hidden per user request
+    this.miniGrid.style.opacity = "0";
+    this.miniGrid.style.display = "none";
+    this.miniGrid.style.pointerEvents = "none";
 
     // Compact Claude plan indicator
     const showPlan = claudeCompactPillVisible();
     this.compactPlan.style.opacity = showPlan ? "1" : "0";
     this.compactPlan.style.pointerEvents = showPlan ? "auto" : "none";
     if (showPlan) {
-      const others = State.otherTasks.slice(0, 4);
-      this.compactPlan.style.right = others.length > 0 ? "58px" : "20px";
       const pct = dominantPct(State.planUsage);
       const color = planColor(pct);
       this.compactPlan.style.setProperty("--plan", color);
@@ -1687,10 +1916,6 @@ export class Island {
     this.compactAiradoro.classList.toggle("rest", airaSnap.phase === "rest");
     this.compactAiradoro.classList.toggle("paused", airaSnap.paused);
     if (showAiradoro) {
-      const others = State.otherTasks.slice(0, 4);
-      let rightOffset = others.length > 0 ? 58 : 20;
-      if (showPlan) rightOffset += 48;
-      this.compactAiradoro.style.right = `${rightOffset}px`;
       const rem = Airadoro.remaining() ?? 0;
       this.compactAiradoroLabel.textContent = AiradoroEngine.clock(rem);
       this.compactAiradoro.title = Airadoro.taskTitle ? `🎯 ${Airadoro.taskTitle}` : "Airadoro";
@@ -1717,66 +1942,83 @@ export class Island {
     this.compactAgenda.style.opacity = showAgenda ? "1" : "0";
     this.compactAgenda.style.pointerEvents = showAgenda ? "auto" : "none";
     if (showAgenda) {
-      const others = State.otherTasks.slice(0, 4);
-      let rightOffset = others.length > 0 ? 58 : 20;
-      if (showPlan) rightOffset += 48;
-      if (showAiradoro) rightOffset += 62;
-      this.compactAgenda.style.right = `${rightOffset}px`;
       this.compactAgendaLabel.textContent = String(pendingToday);
     }
 
-    // Compact live weather pill on the left next to Mochi
-    const snap = Weather.snapshot;
-    const showWeather = State.mode === "compact" && snap != null;
-    this.compactWeather.style.opacity = showWeather ? "1" : "0";
-    this.compactWeather.style.pointerEvents = showWeather ? "auto" : "none";
-    if (showWeather && snap) {
-      const cond = wmoCondition(snap.weatherCode, snap.isDay);
-      const isRainingNow = (snap.precipitationMm ?? 0) > 0 || cond.kind === "rain" || cond.kind === "drizzle" || cond.kind === "storm";
-      const rainSoon = upcomingRainPeak(snap, new Date(), 2);
-      const rainAlert = !isRainingNow && rainSoon != null && rainSoon.precipProb >= 55;
-      const aqi = aqiInfo(snap.usAqi);
-      const aqiAlert = aqi != null && snap.usAqi != null && snap.usAqi >= 101;
+    // Compact live weather pill: hidden per user request
+    this.compactWeather.style.opacity = "0";
+    this.compactWeather.style.display = "none";
+    this.compactWeather.style.pointerEvents = "none";
+    this.compactWeather.classList.remove("rain-alert", "has-aqi-dot");
 
-      this.compactWeather.classList.toggle("rain-alert", rainAlert);
-      this.compactWeather.classList.toggle("has-aqi-dot", aqiAlert);
-      if (aqiAlert && aqi) {
-        this.compactWeatherDot.style.background = aqi.color;
-        this.compactWeatherDot.style.boxShadow = `0 0 5px ${aqi.color}`;
-      }
-
-      const iconKey = `${cond.kind}:${snap.isDay ? "1" : "0"}`;
-      if (this.compactWeatherIconKey !== iconKey) {
-        this.compactWeatherIconKey = iconKey;
-        this.compactWeatherIcon.replaceChildren(buildMiniWeatherIcon(cond.kind, snap.isDay, 12));
-      }
-
-      const tempStr = formatTemp(snap.tempC, Weather.unit);
-      this.compactWeatherLabel.textContent = rainAlert && rainSoon
-        ? `${tempStr} · ${rainSoon.precipProb}%`
-        : tempStr;
-
-      const tipParts = [
-        `${snap.city} · ${t(cond.label)}`,
-        `${t("Feels like")} ${formatTemp(snap.feelsLikeC, Weather.unit)}`,
-      ];
-      if (rainSoon) tipParts.push(`${t("Rain chance")} ${rainSoon.precipProb}% (${rainSoon.hour})`);
-      if (aqi && snap.usAqi != null) tipParts.push(`AQI ${snap.usAqi}`);
-      this.compactWeather.title = tipParts.join(" · ");
-    } else {
-      this.compactWeather.classList.remove("rain-alert", "has-aqi-dot");
-    }
-
+    this.syncCompactLyric();
     this.updateClock();
+    this.applyCompactLayout();
+
+    const nextSize = this.targetSize();
+    if (
+      Math.abs(nextSize.w - this.width.target) > 0.5 ||
+      Math.abs(nextSize.h - this.height.target) > 0.5 ||
+      Math.abs(nextSize.r - this.radius.target) > 0.5
+    ) {
+      this.animateGeometry(nextSize.w < this.width.target || nextSize.h < this.height.target);
+    }
 
     syncMiniBotStates(State.tasks);
     this.engine.setState(State.effectiveState);
   }
 
+  private syncCompactLyric() {
+    const lyric = State.mode === "compact" ? this.currentSyncedLyric() : null;
+    const on = Boolean(lyric);
+    this.compactLyric.style.opacity = on ? "1" : "0";
+    this.compactLyric.style.pointerEvents = on ? "auto" : "none";
+    if (on && lyric && this.compactLyricText.textContent !== lyric) {
+      this.compactLyricText.textContent = lyric;
+    }
+
+    const needTick =
+      State.spotifyPlaying &&
+      Boolean(SpotifyLyrics.current?.synced) &&
+      (State.mode === "compact" ||
+        (State.mode === "hidden" && closedIsland(State.settings.closedIsland) === "music"));
+
+    if (needTick && this.compactLyricTimer == null) {
+      this.compactLyricTimer = window.setInterval(() => {
+        if (!State.spotifyPlaying || !SpotifyLyrics.current?.synced) {
+          if (this.compactLyricTimer != null) window.clearInterval(this.compactLyricTimer);
+          this.compactLyricTimer = null;
+          this.syncCompactLyric();
+          this.applyCompactLayout();
+          this.updateClosed();
+          return;
+        }
+        if (State.mode === "compact") {
+          const prev = this.compactLyricText.textContent || "";
+          const cur = this.currentSyncedLyric() || "";
+          if (prev !== cur) {
+            this.syncCompactLyric();
+            this.applyCompactLayout();
+            const sz = this.targetSize();
+            if (Math.abs(sz.w - this.width.target) > 0.5) {
+              this.animateGeometry(sz.w < this.width.target);
+            }
+          }
+        } else if (State.mode === "hidden") {
+          this.updateClosed();
+        }
+      }, 250);
+    } else if (!needTick && this.compactLyricTimer != null) {
+      window.clearInterval(this.compactLyricTimer);
+      this.compactLyricTimer = null;
+    }
+  }
+
   /** The clock sits in the middle of the compact island, where the notch is on a Mac. */
   private updateClock() {
     this.updateClosed();
-    const on = State.mode === "compact" && State.settings.showClock;
+    const lyricShowing = State.mode === "compact" && Boolean(this.currentSyncedLyric());
+    const on = State.mode === "compact" && State.settings.showClock && !lyricShowing;
     this.clockEl.style.opacity = on ? "1" : "0";
     if (!on) return;
     const now = new Date();
@@ -1788,7 +2030,8 @@ export class Island {
 
   /** Applies settings coming from Rust at boot. */
   applySettings() {
-    this.islandEl.dataset.style = State.settings.islandStyle || "solid";
+    this.islandEl.dataset.style = State.settings.islandStyle || "glass";
+    this.islandEl.dataset.shape = State.settings.islandShape || "notch";
     // The closed island may have changed: what it shows, or whether it shows.
     this.closedKey = "";
     this.updateClosed();
@@ -1806,6 +2049,10 @@ export class Island {
     // ponytail: one timer for the life of the window; a minute is the clock's finest tick.
     this.clockTimer ??= window.setInterval(() => {
       this.updateClock();
+      if (State.mode === "expanded") {
+        this.header.sync();
+        if (State.view === "overview" || State.view === "empty") this.views.get(State.view)?.sync();
+      }
       this.checkAgendaReminders();
     }, 10_000);
     this.checkAgendaReminders();

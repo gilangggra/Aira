@@ -6,7 +6,6 @@ import { addAgendaTask, loadAgendaTasks } from "../core/agenda";
 import { dayKey } from "../core/calendar";
 import {
   Clipboard,
-  countClipboardLines,
   filterClipboardEntries,
   formatClipboardAge,
   isSensitiveClipboardText,
@@ -145,9 +144,9 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
     "button",
     {
       type: "button",
-      class: "clip-clear-btn",
-      title: tl("Clear"),
-      text: tl("Clear"),
+      class: "clip-clear-btn clip-clear-danger",
+      title: tl("Clear history"),
+      text: tl("Clear history"),
       onclick: () => {
         actions.blip();
         Clipboard.clearUnpinned();
@@ -161,11 +160,11 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
     searchInput,
     filtersEl,
     pauseBtn,
-    clearBtn,
   );
 
   const listEl = h("div", { class: "clip-list" });
-  const shell = h("div", { class: "clip-shell" }, toolbar, listEl);
+  const footerEl = h("div", { class: "clip-footer" }, clearBtn);
+  const shell = h("div", { class: "clip-shell" }, toolbar, listEl, footerEl);
   const el = h("div", { class: "view clip-view" }, shell);
 
   el.addEventListener("keydown", (e: KeyboardEvent) => {
@@ -213,29 +212,24 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
     const isSelected = index === selectedIdx;
     const sensitive = entry.sensitive ?? isSensitiveClipboardText(entry.text);
     const isMasked = sensitive && !revealedIds.has(entry.id);
-    const lines = entry.kind === "code" ? countClipboardLines(entry.text) : 1;
 
     const badge = isMasked
       ? h("span", { class: "clip-kind-badge secret", title: tl("Sensitive") }, makeLockSvg())
       : entry.kind === "color"
         ? h("span", { class: "clip-swatch", style: `background:${entry.text.trim()}` })
         : entry.kind === "link"
-          ? h("span", { class: "clip-kind-badge link" }, makeLinkSvg())
+          ? h("span", { class: "clip-kind-pill link" }, makeLinkSvg(), h("span", { text: tl("Link") }))
           : entry.kind === "code"
-            ? h("span", { class: "clip-kind-badge code", text: "</>" })
+            ? h("span", { class: "clip-kind-pill code", text: tl("Code") })
             : entry.pinned
-              ? h("span", { class: "clip-kind-badge pin" }, makePinSvg())
-              : null;
-
-    const sizeMeta = entry.kind === "code" && lines > 1
-      ? `${lines}L · ${entry.text.length}c`
-      : `${entry.text.length}c`;
+              ? h("span", { class: "clip-kind-pill pin", text: tl("Pinned") })
+              : h("span", { class: "clip-kind-pill text", text: tl("Text") });
 
     const meta = isCopied
       ? h("span", { class: "clip-copied-tag", text: `✓ ${t("Copied")}` })
       : h("span", {
           class: "clip-meta",
-          text: `${formatClipboardAge(entry.copiedAt)} · ${sizeMeta}`,
+          text: formatClipboardAge(entry.copiedAt).toUpperCase(),
         });
 
     const previewCls = isMasked
@@ -248,7 +242,6 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
       "div",
       { class: "clip-main" },
       h("div", { class: previewCls, text: isMasked ? maskSensitiveText(entry.text) : previewText(entry.text) }),
-      meta,
     );
 
     const revealBtn = sensitive
@@ -382,6 +375,7 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
       },
       badge,
       main,
+      meta,
       h("div", { class: "clip-actions" }, revealBtn, pinBtn, openBtn, agendaBtn, chatBtn, delBtn),
     );
     return row;

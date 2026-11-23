@@ -64,6 +64,46 @@ export type WeatherKind =
   | "snow"
   | "storm";
 
+export type DayPhase = "dawn" | "morning" | "day" | "afternoon" | "dusk" | "night";
+
+function isoToMinutes(iso?: string | null): number | null {
+  if (!iso) return null;
+  const idx = iso.indexOf("T");
+  if (idx < 0) return null;
+  const parts = iso.slice(idx + 1, idx + 6).split(":");
+  const hh = Number(parts[0]);
+  const mm = Number(parts[1] ?? 0);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  return hh * 60 + mm;
+}
+
+/**
+ * Resolves the real-time sky phase (dawn, morning, day, afternoon, dusk, night)
+ * from the actual local clock (or previewed forecast hour) and today's sunrise/sunset.
+ */
+export function resolveDayPhase(
+  isDay: boolean,
+  sunriseIso?: string | null,
+  sunsetIso?: string | null,
+  previewIso?: string | null,
+): DayPhase {
+  const nowMin = previewIso
+    ? (isoToMinutes(previewIso) ?? 12 * 60)
+    : (() => {
+        const d = new Date();
+        return d.getHours() * 60 + d.getMinutes();
+      })();
+  const rise = isoToMinutes(sunriseIso) ?? 5 * 60 + 45;
+  const set = isoToMinutes(sunsetIso) ?? 17 * 60 + 50;
+
+  if (nowMin >= rise - 35 && nowMin <= rise + 35) return "dawn";
+  if (nowMin >= set - 35 && nowMin <= set + 30) return "dusk";
+  if (!isDay || nowMin < rise - 35 || nowMin > set + 30) return "night";
+  if (nowMin < 11 * 60) return "morning";
+  if (nowMin >= set - 115) return "afternoon";
+  return "day";
+}
+
 export interface WeatherConditionInfo {
   kind: WeatherKind;
   label: string;

@@ -5,6 +5,7 @@
 // Spotify's own window are never signalled).
 
 import { Bridge, onEvent } from "../core/bridge";
+import { SpotifyLyrics } from "../core/lyrics";
 import { pillDefinition } from "../core/pills";
 import { SPOTIFY_ID, Spotify, isAd, type SpotifyState } from "../core/spotify";
 import { State } from "../core/state";
@@ -21,6 +22,7 @@ export function registerSpotifyHandlers(island: SpotifyHost) {
     Spotify.artwork = art;
     State.notify();
   });
+  SpotifyLyrics.subscribe(() => State.notify());
   State.subscribe(() => {
     syncPillName();
     refreshWhenShown();
@@ -32,6 +34,7 @@ export function applySpotify(island: SpotifyHost, next: SpotifyState) {
   const wasPlaying = State.spotifyPlaying;
   Spotify.state = next;
   syncPillName();
+  void SpotifyLyrics.syncForTrack(next.track, Bridge.spotifyLyrics);
   // Only on not playing → playing (SpotifyController.setPlaying).
   if (!wasPlaying && State.spotifyPlaying && !State.paused && State.mode === "hidden") {
     island.revealSilently();

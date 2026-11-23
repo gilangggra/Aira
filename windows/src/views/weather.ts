@@ -11,11 +11,13 @@ import {
   formatTemp,
   formatWeatherLocationSub,
   isHourDaytime,
+  resolveDayPhase,
   upcomingHourly,
   upcomingRainPeak,
   uvLevel,
   weatherAdvisory,
   wmoCondition,
+  type DayPhase,
   type WeatherAdvisory,
   type WeatherKind,
   type WeatherLocation,
@@ -28,7 +30,6 @@ import type { ViewActions, ViewHost } from "./views";
 import {
   buildMetricIcon,
   buildMiniWeatherIcon,
-  buildWeatherSceneSvg,
   resolveWeatherScene,
 } from "./weather-art";
 
@@ -47,20 +48,25 @@ interface FxParticle {
 interface FxScene {
   kind: WeatherKind;
   isDay: boolean;
+  dayPhase: DayPhase;
   windKmh: number;
   cloudCover: number;
   precipMm: number;
 }
 
-/** Real-time interactive Canvas particle engine for live weather atmosphere. */
+/**
+ * Clean Apple Weather-style subtle background atmosphere engine.
+ * Renders gentle, unobtrusive ambient particles (soft stars at night, warm solar glow
+ * in daytime/afternoon, subtle clouds, clean rain/snow) strictly behind the glass UI.
+ */
 class WeatherFxEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D | null;
   private particles: FxParticle[] = [];
   private rafId: number | null = null;
   private lastTs = 0;
-  private w = 520;
-  private h = 194;
+  private w = 540;
+  private h = 230;
   private dpr = 1;
   private flashAlpha = 0;
   private nextFlashAt = 0;
@@ -68,6 +74,7 @@ class WeatherFxEngine {
   private scene: FxScene = {
     kind: "clear",
     isDay: true,
+    dayPhase: "day",
     windKmh: 8,
     cloudCover: 20,
     precipMm: 0,
@@ -87,12 +94,11 @@ class WeatherFxEngine {
 
   triggerBurst() {
     if (this.scene.kind === "storm") {
-      this.flashAlpha = 0.55;
+      this.flashAlpha = 0.28;
       return;
     }
-    for (let i = 0; i < Math.min(14, this.particles.length); i++) {
-      this.particles[i].vy *= 1.35;
-      this.particles[i].alpha = Math.min(1, this.particles[i].alpha + 0.35);
+    for (let i = 0; i < Math.min(10, this.particles.length); i++) {
+      this.particles[i].alpha = Math.min(0.85, this.particles[i].alpha + 0.2);
     }
   }
 
@@ -100,7 +106,8 @@ class WeatherFxEngine {
     const changed =
       this.scene.kind !== next.kind ||
       this.scene.isDay !== next.isDay ||
-      Math.abs(this.scene.cloudCover - next.cloudCover) > 15;
+      this.scene.dayPhase !== next.dayPhase ||
+      Math.abs(this.scene.cloudCover - next.cloudCover) > 20;
     this.scene = next;
     if (changed) this.seedParticles();
   }
@@ -143,33 +150,32 @@ class WeatherFxEngine {
     this.dpr = dpr;
     this.w = rect.width;
     this.h = rect.height;
-    if (this.ctx) this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   private seedParticles() {
     const k = this.scene.kind;
-    let count = 18;
-    if (k === "rain" || k === "storm") count = Math.min(72, 36 + Math.round(this.scene.precipMm * 8));
-    else if (k === "drizzle") count = 28;
-    else if (k === "snow") count = 36;
-    else if (k === "clear" && !this.scene.isDay) count = 28;
-    else if (k === "cloudy" || k === "fog" || k === "partly-cloudy") count = 12;
+    let count = 16;
+    if (k === "rain" || k === "storm") count = Math.min(52, 30 + Math.round(this.scene.precipMm * 5));
+    else if (k === "drizzle") count = 24;
+    else if (k === "snow") count = 30;
+    else if (!this.scene.isDay || this.scene.dayPhase === "night" || this.scene.dayPhase === "dusk") count = 34;
+    else if (k === "cloudy" || k === "fog" || k === "partly-cloudy") count = 10;
 
     this.particles = Array.from({ length: count }, () => this.spawnParticle(true));
   }
 
   private spawnParticle(randomY: boolean): FxParticle {
     const k = this.scene.kind;
-    const windDrift = Math.max(8, this.scene.windKmh * 1.8);
+    const windDrift = Math.max(6, this.scene.windKmh * 1.4);
     if (k === "rain" || k === "storm" || k === "drizzle") {
-      const speed = k === "drizzle" ? 170 : k === "storm" ? 310 : 250;
+      const speed = k === "drizzle" ? 185 : k === "storm" ? 310 : 255;
       return {
         x: Math.random() * (this.w + 60) - 30,
-        y: randomY ? Math.random() * this.h : -12,
-        vx: -windDrift * 1.1,
-        vy: speed + Math.random() * 80,
-        size: k === "drizzle" ? 6 : 10 + Math.random() * 6,
-        alpha: k === "drizzle" ? 0.28 + Math.random() * 0.22 : 0.35 + Math.random() * 0.35,
+        y: randomY ? Math.random() * this.h : -14,
+        vx: -windDrift * 0.9,
+        vy: speed + Math.random() * 65,
+        size: k === "drizzle" ? 7 : 11 + Math.random() * 6,
+        alpha: k === "drizzle" ? 0.16 + Math.random() * 0.14 : 0.22 + Math.random() * 0.2,
         phase: Math.random() * Math.PI * 2,
       };
     }
@@ -177,32 +183,31 @@ class WeatherFxEngine {
       return {
         x: Math.random() * this.w,
         y: randomY ? Math.random() * this.h : -8,
-        vx: -windDrift * 0.35,
-        vy: 28 + Math.random() * 24,
-        size: 1.5 + Math.random() * 2.2,
-        alpha: 0.45 + Math.random() * 0.4,
+        vx: -windDrift * 0.28,
+        vy: 22 + Math.random() * 20,
+        size: 1.3 + Math.random() * 1.8,
+        alpha: 0.35 + Math.random() * 0.35,
         phase: Math.random() * Math.PI * 2,
       };
     }
     if (k === "cloudy" || k === "fog" || k === "partly-cloudy") {
       return {
-        x: Math.random() * (this.w + 120) - 60,
-        y: 12 + Math.random() * (this.h * 0.72),
-        vx: 6 + windDrift * 0.25 + Math.random() * 6,
+        x: Math.random() * (this.w + 140) - 70,
+        y: 10 + Math.random() * (this.h * 0.65),
+        vx: 4 + windDrift * 0.18 + Math.random() * 4,
         vy: 0,
-        size: 36 + Math.random() * 48,
+        size: 45 + Math.random() * 55,
         alpha: k === "fog" ? 0.08 : 0.055,
         phase: Math.random() * Math.PI * 2,
       };
     }
-    // Clear day dust motes or clear night stars
     return {
       x: Math.random() * this.w,
       y: Math.random() * this.h,
-      vx: this.scene.isDay ? 4 + Math.random() * 6 : 0,
-      vy: this.scene.isDay ? -3 - Math.random() * 4 : 0,
-      size: this.scene.isDay ? 1.4 + Math.random() * 1.6 : 0.9 + Math.random() * 1.4,
-      alpha: 0.25 + Math.random() * 0.55,
+      vx: this.scene.isDay ? 3 + Math.random() * 4 : 0,
+      vy: this.scene.isDay ? -2 - Math.random() * 3 : 0,
+      size: this.scene.isDay ? 1.1 + Math.random() * 1.3 : 0.8 + Math.random() * 1.2,
+      alpha: 0.25 + Math.random() * 0.48,
       phase: Math.random() * Math.PI * 2,
     };
   }
@@ -210,10 +215,10 @@ class WeatherFxEngine {
   private step(dt: number, now: number) {
     const k = this.scene.kind;
     if (k === "storm") {
-      if (this.flashAlpha > 0) this.flashAlpha = Math.max(0, this.flashAlpha - dt * 2.4);
+      if (this.flashAlpha > 0) this.flashAlpha = Math.max(0, this.flashAlpha - dt * 2.2);
       if (now > this.nextFlashAt) {
-        this.flashAlpha = 0.42;
-        this.nextFlashAt = now + 2600 + Math.random() * 4500;
+        this.flashAlpha = 0.24;
+        this.nextFlashAt = now + 3400 + Math.random() * 5200;
       }
     } else {
       this.flashAlpha = 0;
@@ -225,19 +230,7 @@ class WeatherFxEngine {
       p.y += p.vy * dt;
 
       if (k === "snow") {
-        p.x += Math.sin(now * 0.002 + p.phase) * 14 * dt;
-      }
-
-      // Gentle pointer deflection
-      if (this.pointer.active) {
-        const dx = p.x - this.pointer.x;
-        const dy = p.y - this.pointer.y;
-        const dist2 = dx * dx + dy * dy;
-        if (dist2 > 1 && dist2 < 2400) {
-          const push = (1 - Math.sqrt(dist2) / 49) * 90 * dt;
-          p.x += (dx / Math.sqrt(dist2)) * push;
-          p.y += (dy / Math.sqrt(dist2)) * push;
-        }
+        p.x += Math.sin(now * 0.0018 + p.phase) * 12 * dt;
       }
 
       if (k === "rain" || k === "storm" || k === "drizzle" || k === "snow") {
@@ -245,12 +238,12 @@ class WeatherFxEngine {
           this.particles[i] = this.spawnParticle(false);
         }
       } else if (k === "cloudy" || k === "fog" || k === "partly-cloudy") {
-        if (p.x - p.size > this.w + 40) {
-          p.x = -p.size - 20;
+        if (p.x - p.size > this.w + 50) {
+          p.x = -p.size - 25;
         }
       } else if (this.scene.isDay) {
         if (p.y < -8 || p.x > this.w + 8) {
-          p.x = Math.random() * this.w * 0.7;
+          p.x = Math.random() * this.w * 0.8;
           p.y = this.h + 4;
         }
       }
@@ -260,24 +253,12 @@ class WeatherFxEngine {
   private draw(now: number) {
     const ctx = this.ctx;
     if (!ctx) return;
-    // Clear in device pixels so fractional DPI scaling never leaves an
-    // uncleared 1px column/row along the right or bottom edge.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     const k = this.scene.kind;
-
-    // Interactive sunbeam glow on clear day
-    if ((k === "clear" || k === "partly-cloudy") && this.scene.isDay) {
-      const gx = this.pointer.active ? 54 + (this.pointer.x - 54) * 0.12 : 54;
-      const gy = this.pointer.active ? 44 + (this.pointer.y - 44) * 0.12 : 44;
-      const g = ctx.createRadialGradient(gx, gy, 4, gx, gy, 150);
-      g.addColorStop(0, "rgba(251, 191, 36, 0.16)");
-      g.addColorStop(1, "rgba(251, 191, 36, 0)");
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, this.w, this.h);
-    }
+    const phase = this.scene.dayPhase;
 
     if (this.flashAlpha > 0.01) {
       ctx.fillStyle = `rgba(224, 242, 254, ${this.flashAlpha.toFixed(3)})`;
@@ -286,33 +267,31 @@ class WeatherFxEngine {
 
     for (const p of this.particles) {
       if (k === "rain" || k === "storm" || k === "drizzle") {
-        ctx.strokeStyle = `rgba(125, 211, 252, ${p.alpha.toFixed(2)})`;
-        ctx.lineWidth = k === "drizzle" ? 1 : 1.35;
+        ctx.strokeStyle = `rgba(186, 230, 253, ${p.alpha.toFixed(2)})`;
+        ctx.lineWidth = k === "drizzle" ? 0.9 : 1.15;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + p.vx * 0.032, p.y + p.size);
+        ctx.lineTo(p.x + p.vx * 0.028, p.y + p.size);
         ctx.stroke();
       } else if (k === "snow") {
-        ctx.fillStyle = `rgba(224, 242, 254, ${p.alpha.toFixed(2)})`;
+        ctx.fillStyle = `rgba(241, 245, 249, ${p.alpha.toFixed(2)})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
       } else if (k === "cloudy" || k === "fog" || k === "partly-cloudy") {
-        const g = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, p.size);
-        g.addColorStop(0, `rgba(226, 232, 240, ${p.alpha.toFixed(3)})`);
-        g.addColorStop(1, "rgba(226, 232, 240, 0)");
-        ctx.fillStyle = g;
+        // Subtle drifting mist specks only (no large radial blobs that create edges)
+        ctx.fillStyle = `rgba(241, 245, 249, ${(p.alpha * 0.25).toFixed(3)})`;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 1.2, 0, Math.PI * 2);
         ctx.fill();
-      } else if (!this.scene.isDay) {
-        const twinkle = 0.35 + 0.65 * Math.abs(Math.sin(now * 0.0018 + p.phase));
+      } else if (!this.scene.isDay || phase === "night" || phase === "dusk") {
+        const twinkle = 0.3 + 0.7 * Math.abs(Math.sin(now * 0.0018 + p.phase));
         ctx.fillStyle = `rgba(248, 250, 252, ${(p.alpha * twinkle).toFixed(2)})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        ctx.fillStyle = `rgba(253, 224, 71, ${(p.alpha * 0.45).toFixed(2)})`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${(p.alpha * 0.26).toFixed(2)})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
@@ -656,11 +635,15 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
     const activeIsDay = previewPt ? isHourDaytime(previewPt.time, todayRise, todaySet, snap.isDay) : snap.isDay;
     const activeTempC = previewPt ? previewPt.tempC : snap.tempC;
     const cond = wmoCondition(activeCode, activeIsDay);
+    const dayPhase = resolveDayPhase(activeIsDay, todayRise, todaySet, previewPt?.time);
 
     shell.dataset.mood = cond.kind === "clear" ? (activeIsDay ? "clear-day" : "clear-night") : cond.kind;
+    shell.dataset.phase = dayPhase;
+
     fx.setScene({
       kind: cond.kind,
       isDay: activeIsDay,
+      dayPhase,
       windKmh: snap.windKmh,
       cloudCover: snap.cloudCover ?? (cond.kind === "clear" ? 10 : 65),
       precipMm: snap.precipitationMm ?? (previewPt && previewPt.precipProb > 40 ? 2 : 0),
@@ -688,18 +671,22 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
         Weather.setUnit(Weather.unit === "C" ? "F" : "C");
       },
     });
+    const todayRange =
+      snap.daily.length > 0
+        ? `H:${convertTemp(snap.daily[0].tempMaxC, Weather.unit)}° L:${convertTemp(snap.daily[0].tempMinC, Weather.unit)}°`
+        : "";
     const condText = h("span", { class: "weather-cond", text: t(cond.label) });
     const feelsText = h("div", {
       class: "weather-feels",
       text: previewPt
         ? `${formatHourLabel(previewPt.time)} · ${previewPt.precipProb}%`
-        : `${t("Feels like")} ${formatTemp(snap.feelsLikeC, Weather.unit)}`,
+        : `${todayRange ? `${todayRange} · ` : ""}${t("Feels like")} ${formatTemp(snap.feelsLikeC, Weather.unit)}`,
     });
 
-    const sceneCard = h(
+    const heroLeft = h(
       "div",
       {
-        class: "weather-scene-card",
+        class: "weather-open-hero-left",
         "data-scene": sceneKey,
         title: t(cond.label),
         onclick: () => {
@@ -708,70 +695,92 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
           actions.emote?.(cond.emote);
         },
       },
-      buildWeatherSceneSvg(sceneKey),
-      h(
-        "div",
-        { class: "weather-scene-overlay" },
-        h("div", { class: "weather-scene-head" }, tempBtn, condText),
-        feelsText,
-      ),
+      h("div", { class: "apple-hero-top" }, tempBtn, buildMiniWeatherIcon(cond.kind, activeIsDay, 24)),
+      h("div", { class: "apple-hero-sub" }, condText, feelsText),
     );
 
     const aqi = aqiInfo(snap.usAqi);
-    const aqiRow = h("div", { class: "weather-aqi-row" });
-    if (aqi && snap.usAqi != null) {
-      const pct = Math.min(98, Math.max(2, Math.round((snap.usAqi / 300) * 100)));
-      const aqiBtn = h(
-        "button",
-        {
-          type: "button",
-          class: "weather-aqi-card",
-          onclick: () => {
-            actions.blip();
-            showAqiDetail = !showAqiDetail;
-            renderBody(snap);
-          },
-        },
-        h(
-          "div",
-          { class: "weather-aqi-head" },
-          h(
-            "span",
-            { class: "weather-aqi-label" },
-            h("i", { class: "weather-aqi-dot", style: `background:${aqi.color};box-shadow:0 0 6px ${aqi.color}` }),
-            h("span", { text: `AQI ${snap.usAqi} · ${t(aqi.label)}` }),
-          ),
-          snap.pm25 != null
-            ? h("span", {
-              class: "weather-pm-detail",
-              text: showAqiDetail && snap.pm10 != null
-                ? `PM2.5 ${snap.pm25.toFixed(0)} · PM10 ${snap.pm10.toFixed(0)}`
-                : `PM2.5 ${snap.pm25.toFixed(1)}`,
-            })
-            : null,
-        ),
-        h("div", { class: "weather-aqi-bar" }, h("i", { class: "weather-aqi-marker", style: `left:${pct}%` })),
-      );
-      aqiRow.append(aqiBtn);
-    }
-
     const rainPeak = upcomingRainPeak(snap, new Date(), 6);
-    const metrics = h(
+
+    const metricHumidity = h(
       "div",
-      { class: "weather-metrics" },
-      h("span", { class: "weather-metric", title: tl("Humidity") }, buildMetricIcon("humidity", 11), h("span", { text: `${snap.humidity}%` })),
-      h("span", { class: "weather-metric", title: tl("Wind") }, buildMetricIcon("wind", 11), h("span", { text: `${Math.round(snap.windKmh)} km/h` })),
-      h("span", { class: "weather-metric", title: tl("UV index") }, buildMetricIcon("uv", 11), h("span", { text: `UV ${Math.round(snap.uvIndex)} · ${t(uvLevel(snap.uvIndex))}` })),
-      snap.precipitationMm && snap.precipitationMm > 0
-        ? h("span", { class: "weather-metric", title: tl("Precipitation") }, buildMetricIcon("rain", 11), h("span", { text: `${snap.precipitationMm.toFixed(1)} mm` }))
-        : rainPeak
-          ? h("span", { class: "weather-metric", title: tl("Rain chance") }, buildMetricIcon("rain", 11), h("span", { text: `${rainPeak.precipProb}% · ${rainPeak.hour}` }))
-          : snap.cloudCover != null
-            ? h("span", { class: "weather-metric", title: tl("Cloud cover") }, buildMetricIcon("cloud", 11), h("span", { text: `${snap.cloudCover}%` }))
-            : null,
+      { class: "weather-metric-item", title: tl("Humidity") },
+      buildMetricIcon("humidity", 12),
+      h("span", { class: "weather-metric-val", text: `${snap.humidity}%` }),
     );
 
-    const leftCol = h("div", { class: "weather-hero" }, sceneCard, aqiRow, metrics);
+    const metricWind = h(
+      "div",
+      { class: "weather-metric-item", title: tl("Wind") },
+      buildMetricIcon("wind", 12),
+      h("span", { class: "weather-metric-val", text: `${Math.round(snap.windKmh)} km/h` }),
+    );
+
+    const metricUv = h(
+      "div",
+      { class: "weather-metric-item", title: tl("UV index") },
+      buildMetricIcon("uv", 12),
+      h("span", { class: "weather-metric-val", text: `UV ${Math.round(snap.uvIndex)} · ${t(uvLevel(snap.uvIndex))}` }),
+    );
+
+    const aqiItem =
+      aqi && snap.usAqi != null
+        ? h(
+            "button",
+            {
+              type: "button",
+              class: "weather-metric-item aqi-button",
+              title: snap.pm25 != null ? `PM2.5: ${snap.pm25.toFixed(1)}` : "AQI",
+              onclick: () => {
+                actions.blip();
+                showAqiDetail = !showAqiDetail;
+                renderBody(snap);
+              },
+            },
+            h("i", { class: "weather-aqi-dot", style: `background:${aqi.color};box-shadow:0 0 6px ${aqi.color}` }),
+            h("span", {
+              class: "weather-metric-val",
+              text: showAqiDetail && snap.pm25 != null
+                ? `PM2.5 ${snap.pm25.toFixed(1)}`
+                : `AQI ${snap.usAqi} · ${t(aqi.label)}`,
+            }),
+          )
+        : snap.precipitationMm && snap.precipitationMm > 0
+          ? h(
+              "div",
+              { class: "weather-metric-item", title: tl("Precipitation") },
+              buildMetricIcon("rain", 12),
+              h("span", { class: "weather-metric-val", text: `${snap.precipitationMm.toFixed(1)} mm` }),
+            )
+          : rainPeak
+            ? h(
+                "div",
+                { class: "weather-metric-item", title: tl("Rain chance") },
+                buildMetricIcon("rain", 12),
+                h("span", { class: "weather-metric-val", text: `${rainPeak.precipProb}% · ${rainPeak.hour}` }),
+              )
+            : snap.cloudCover != null
+              ? h(
+                  "div",
+                  { class: "weather-metric-item", title: tl("Cloud cover") },
+                  buildMetricIcon("cloud", 12),
+                  h("span", { class: "weather-metric-val", text: `${snap.cloudCover}%` }),
+                )
+              : null;
+
+    const heroRight = h(
+      "div",
+      { class: "weather-open-hero-right" },
+      h(
+        "div",
+        { class: "weather-metrics-grid" },
+        metricHumidity,
+        metricWind,
+        metricUv,
+        aqiItem,
+      ),
+    );
+    const openHero = h("div", { class: "weather-open-hero" }, heroLeft, heroRight);
 
     const tabHourly = h("button", {
       type: "button",
@@ -822,9 +831,6 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
     if (forecastTab === "hourly") {
       if (hours.length > 0) {
         const temps = hours.map((p) => convertTemp(p.tempC, Weather.unit));
-        const minT = Math.min(...temps);
-        const maxT = Math.max(...temps);
-        const span = Math.max(1, maxT - minT);
 
         const activeIdx = previewIdx != null && previewIdx < hours.length ? previewIdx : 0;
         const activePt = hours[activeIdx];
@@ -849,7 +855,6 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
         for (let i = 0; i < hours.length; i++) {
           const pt = hours[i];
           const tVal = temps[i];
-          const pct = maxT === minT ? 55 : 32 + Math.round(((tVal - minT) / span) * 60);
           const ptDay = isHourDaytime(pt.time, todayRise, todaySet, snap.isDay);
           const ptCond = wmoCondition(pt.weatherCode, ptDay);
           const isSelected = previewIdx != null ? i === previewIdx : i === 0;
@@ -861,11 +866,15 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
           ]
             .filter(Boolean)
             .join(" ");
+
+          const hourText = i === 0 ? t("Now") : formatHourLabel(pt.time).slice(0, 2);
+
           const col = h(
             "button",
             {
               type: "button",
               class: colClass,
+              title: `${formatHourLabel(pt.time)} · ${t(ptCond.label)} · ${tVal}°`,
               onmouseenter: () => {
                 if (hoveredHourIdx !== i) {
                   hoveredHourIdx = i;
@@ -879,21 +888,16 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
                 renderBody(snap);
               },
             },
-            h("span", { class: "w-bar-temp", text: `${tVal}°` }),
-            h(
-              "div",
-              { class: "w-bar-track" },
-              h("div", { class: "w-bar-fill", style: `height:${pct}%` }),
-            ),
-            h("span", { class: "w-bar-icon" }, buildMiniWeatherIcon(ptCond.kind, ptDay, 14)),
-            h("span", {
-              class: pt.precipProb > 0 ? "w-bar-rain" : "w-bar-rain mute",
-              text: pt.precipProb > 0 ? `${pt.precipProb}%` : "·",
-            }),
             h("span", {
               class: isNextDayStart ? "w-bar-hr next" : "w-bar-hr",
-              text: formatHourLabel(pt.time).slice(0, 2),
+              text: hourText,
             }),
+            h("span", { class: "w-bar-icon" }, buildMiniWeatherIcon(ptCond.kind, ptDay, 18)),
+            h("span", {
+              class: pt.precipProb > 0 ? "w-bar-rain" : "w-bar-rain empty",
+              text: pt.precipProb > 0 ? `${pt.precipProb}%` : "",
+            }),
+            h("span", { class: "w-bar-temp", text: `${tVal}°` }),
           );
           bars.append(col);
         }
@@ -963,8 +967,8 @@ export function buildWeatherView(actions: ViewActions): ViewHost {
       })()
       : null;
 
-    const rightCol = h("div", { class: "weather-forecast" }, forecastHead, forecastContent, advisoryEl);
-    bodyEl.append(leftCol, rightCol);
+    const forecastSection = h("div", { class: "weather-open-forecast" }, forecastHead, forecastContent, advisoryEl);
+    bodyEl.append(openHero, forecastSection);
   }
 
   shell.append(fxCanvas, topBar, bodyEl, searchOverlay);

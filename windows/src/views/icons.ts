@@ -103,4 +103,8 @@ export const ICONS = {
   newChat: "M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13M18.2 3.8a1.8 1.8 0 0 1 2.55 2.55L12 15.1l-3.4.85.85-3.4L18.2 3.8z",
   // envelope (stroked) — Mail toggle
   envelope: "M4 6.5h16a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 16V8A1.5 1.5 0 0 1 4 6.5zm0 1.5 8 5.2L20 8",
+  // display (stroked) — Output device / Open player
+  display: "M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 14.5v-9zM8.5 19.5h7M12 16v3.5",
+  // microphone (fill) — Spotify Lyrics
+  mic: "M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zm5 9a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z",
 } as const;

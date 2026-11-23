@@ -44,6 +44,8 @@ export interface ClosedInputs {
   planUsage: PlanUsage | null;
   /** The song playing, if one plays on a declared music pill. */
   music: { title: string; artist: string } | null;
+  /** Active synced lyric line for the playing track, if available. */
+  lyric?: string | null;
 }
 
 function time(now: Date, locale?: string): string {
@@ -77,6 +79,7 @@ export function closedContent(style: ClosedIsland, input: ClosedInputs): ClosedC
     case "music": {
       const m = input.music;
       if (!m || !m.title) return plain(time(input.now, input.locale));
+      if (input.lyric) return { text: input.lyric, dot: null, note: true };
       return { text: m.artist ? `${m.title} · ${m.artist}` : m.title, dot: null, note: true };
     }
   }

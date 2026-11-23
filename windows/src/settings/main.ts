@@ -296,6 +296,12 @@ function claudeSection(status: HookStatus): HTMLElement {
         text: t("aira-hook.exe is not in place yet. Restart Aira; if it still fails, build it with `cargo build -p aira-hook`."),
       }));
     }
+    if (status.relayError) {
+      body.append(h("div", {
+        class: "notice warn",
+        text: t("The hook relay could not start ({error}). Hooks will not reach Aira.", { error: status.relayError }),
+      }));
+    }
 
     const actions = h("div", { class: "row" });
     const install = h("button", {
@@ -321,6 +327,11 @@ function claudeSection(status: HookStatus): HTMLElement {
   }
 
   draw();
+  void onEvent<string | null>("pipe-error", (err) => {
+    if (!section.isConnected) return;
+    status.relayError = err ?? null;
+    redraw();
+  });
   return section;
 }
 
@@ -1277,13 +1288,25 @@ function generalSections(): HTMLElement[] {
 
   const styleCtrl = segmentedControl(
     [
-      ["solid", t("OLED Black (Solid)")],
       ["glass", t("Acrylic Glass")],
+      ["solid", t("OLED Black (Solid)")],
       ["translucent", t("Translucent")],
     ],
-    settings.islandStyle || "solid",
+    settings.islandStyle || "glass",
     (val) => {
       settings.islandStyle = val;
+      void save();
+    },
+  );
+
+  const shapeCtrl = segmentedControl(
+    [
+      ["notch", t("Top Notch")],
+      ["island", t("Dynamic Island")],
+    ],
+    settings.islandShape || "notch",
+    (val) => {
+      settings.islandShape = val;
       void save();
     },
   );
@@ -1297,7 +1320,8 @@ function generalSections(): HTMLElement[] {
     setSwitch(autostart, settings.autostart);
     positionCtrl.setValue(settings.islandPosition || "top");
     scaleCtrl.setValue(settings.islandScale || "normal");
-    styleCtrl.setValue(settings.islandStyle || "solid");
+    styleCtrl.setValue(settings.islandStyle || "glass");
+    shapeCtrl.setValue(settings.islandShape || "notch");
     // A field being edited keeps what is in it; it catches up when it is left.
     if (document.activeElement !== volume) {
       volume.value = String(settings.soundVolume);
@@ -1357,6 +1381,11 @@ function generalSections(): HTMLElement[] {
       t("Visual style"),
       t("Background appearance and glass blur effect."),
       styleCtrl.element,
+    ),
+    settingItem(
+      t("Island shape"),
+      t("Attach to the top screen bezel like a notch, or float as a Dynamic Island capsule."),
+      shapeCtrl.element,
     ),
     settingItem(
       t("Closed island shows"),
