@@ -16,7 +16,7 @@ import { renderIntegrationCard, type IntegrationCardHooks } from "./integrations
 import { highlightRow, listRows, openRow } from "./github";
 import { pillDefinition, sessionSubtitle } from "../core/pills";
 import {
-  PlanCard, buildPlanPill, claudePillVisible, codexPillVisible, planCardOpen, refreshCodexPlanUsage,
+  PlanCard, buildPlanPill, claudePillVisible, closePlanCard, codexPillVisible, planCardOpen, refreshCodexPlanUsage,
 } from "./usage";
 import { buildDiffCard } from "./diff";
 import { lastTextStep } from "../core/diff";
@@ -29,14 +29,16 @@ import { buildLaunch } from "./launch";
 import { buildAgendaView, buildReminderView } from "./agenda";
 import { buildClipboardView } from "./clipboard";
 import { buildWeatherView } from "./weather";
-import { buildSpotifyCard, buildSpotifyPill, type SpotifyPillHost } from "./spotify";
-import { SPOTIFY_ID } from "../core/spotify";
+import { buildSpotifyCard, buildSpotifyPill, togglePlay, type SpotifyPillHost } from "./spotify";
+import { SPOTIFY_ID, Spotify, currentArtwork } from "../core/spotify";
 import { buildWhatsAppCard } from "./whatsapp";
 import { WHATSAPP_ID } from "../core/whatsapp";
-import { MAIL_ID } from "../core/mail";
+import { MAIL_ID, type MailCardData } from "../core/mail";
 import { buildMailCard } from "./mail";
 import { buildAiradoroCard, buildAiradoroPill, type AiradoroPillHost } from "./airadoro";
-import { AIRADORO_ID } from "../core/airadoro";
+import { AIRADORO_ID, AiradoroEngine } from "../core/airadoro";
+import { Airadoro } from "../island/airadoro";
+import { Weather, formatTemp } from "../core/weather";
 import type { Outfit, OutfitSelection } from "../mochi/wardrobe";
 import { language, t, tl, type Msg } from "../i18n/i18n";
 import type { ViewCommand } from "../island/shortcuts";
@@ -130,77 +132,154 @@ function stack(padLeft: number, padRight: number, ...children: Node[]): HTMLElem
   return el;
 }
 
-// ── Header ────────────────────────────────────────────────────────────────────
+// ── Header (Top Status Bar) + Bottom Dock ────────────────────────────────────
 
-export function buildHeader(actions: ViewActions): ViewHost {
-  const tabHome = h("button", { class: "tab", title: tl("Overview"), onclick: () => go("overview") }, svg(ICONS.house, 17));
-  const tabChat = h("button", { class: "tab", title: tl("Ask"), onclick: () => go("prompt") }, svg(ICONS.bubbleRound, 19));
-  const tabDrop = h("button", { class: "tab", title: tl("Drop"), onclick: () => go("upload") }, svg(ICONS.plus, 16));
-  // A new Claude Code session, in a project, from here (Mac: the terminal tab).
-  const tabLaunch = h(
-    "button",
-    { class: "tab", title: tl("New Claude Code session"), onclick: () => go("launch") },
-    svg(ICONS.terminal, 17, { stroke: 1.7 }),
-  );
-  const tabAgenda = h(
-    "button",
-    { class: "tab tab-agenda", title: tl("Calendar"), onclick: () => go("agenda") },
-    svg(ICONS.calendar, 16, { stroke: 1.7 }),
-    h("i", { class: "tab-dot" }),
-  );
-  const tabWeather = h(
-    "button",
-    { class: "tab tab-weather", title: tl("Weather"), onclick: () => go("weather") },
-    svg(ICONS.cloudSun, 17, { stroke: 1.7 }),
-  );
-  const tabClipboard = h(
-    "button",
-    { class: "tab tab-clipboard", title: tl("Clipboard"), onclick: () => go("clipboard") },
-    svg(ICONS.clipboard, 16, { stroke: 1.7 }),
-  );
+export interface ViewHeader extends ViewHost {
+  dockEl: HTMLElement;
+}
 
-  const gearBtn = h("button", { title: tl("Settings"), onclick: () => go("settings") }, svg(ICONS.gearLine, 18, { stroke: 1.6 }));
-  const soundBtn = h("button", { title: tl("Mute"), onclick: () => actions.toggleSound() }, svg(ICONS.speakerLine, 18, { stroke: 1.6 }));
-  // Folds back to the compact island now, without waiting for the timer (the
-  // Mac's ✕). A card waiting for an answer keeps the island open: no ✕ then.
-  const closeBtn = h("button", { class: "close", title: tl("Close"), onclick: () => actions.collapse() }, svg(ICONS.xmark, 17));
-  // Plan usage pills (off by default): before the gear, Claude first, as on the Mac.
+export function buildHeader(actions: ViewActions): ViewHeader {
+  function go(v: IslandViewName) {
+    actions.blip();
+    if (v === "overview") {
+      window.dispatchEvent(new CustomEvent("aira:dash-home"));
+    }
+    actions.setView(v);
+  }
+
+  // ── Top status strip (Left: date + temp, Center: Mochi eyes, Right: time + plan)
+  const topDate = h("span", { class: "top-date" });
+  const topTemp = h("span", { class: "top-temp" });
+  const topLeftBtn = h(
+    "button",
+    { class: "top-meta-btn", title: tl("Weather"), onclick: () => go("weather") },
+    topDate,
+    topTemp,
+  );
+  const topCenterSpacer = h("div", { class: "top-mochi-slot" });
+  const topClock = h("span", { class: "top-clock" });
+  const topAgentDot = h("span", { class: "top-agent-dot" });
+
+  // Plan usage pills (off by default): Claude first, as on the Mac.
   const claudePill = buildPlanPill(false);
   const codexPill = buildPlanPill(true);
   const planPills = h("div", { class: "plan-pills" }, claudePill.el, codexPill.el);
   let codexShown = false;
 
-  function go(v: IslandViewName) {
-    actions.blip();
-    actions.setView(v);
+  const headerActions = h("div", { class: "header-actions" }, planPills, topAgentDot, topClock);
+  const el = h("div", { id: "header" }, topLeftBtn, topCenterSpacer, headerActions);
+
+  // ── Bottom frosted dock bar ─────────────────────────────────────────────────
+  function dockTab(
+    icon: string,
+    label: Msg,
+    onClick: () => void,
+    extraClass = "",
+  ): HTMLElement {
+    return h(
+      "button",
+      {
+        type: "button",
+        class: extraClass ? `dock-tab ${extraClass}` : "dock-tab",
+        title: label,
+        onclick: onClick,
+      },
+      h("span", { class: "dock-ico" }, svg(icon, 15, { stroke: 1.8 })),
+      h("span", { class: "dock-lbl", text: label }),
+    );
   }
 
-  const el = h(
-    "div",
-    { id: "header" },
-    h("div", { class: "tabs" }, tabHome, tabChat, tabDrop, tabLaunch, tabAgenda, tabWeather, tabClipboard),
-    h("div", { class: "header-actions" }, planPills, gearBtn, soundBtn, closeBtn),
+  const dockPlus = h(
+    "button",
+    {
+      type: "button",
+      class: "dock-icon-btn dock-plus",
+      title: tl("Drop"),
+      onclick: () => go("upload"),
+    },
+    svg(ICONS.plus, 14, { stroke: 2 }),
   );
-  const headerActions = el.lastElementChild as HTMLElement;
+  const dockChat = dockTab(ICONS.bubbleRound, tl("Ask"), () => go("prompt"));
+  const dockHome = dockTab(ICONS.house, tl("Home"), () => go("overview"));
+  const dockWeather = dockTab(ICONS.cloudSun, tl("Weather"), () => go("weather"));
+  const dockLaunch = dockTab(ICONS.terminal, tl("Agents"), () => go("launch"));
+  const dockClips = dockTab(ICONS.clipboard, tl("Clips"), () => go("clipboard"));
+  const dockNotes = dockTab(ICONS.calendar, tl("Notes"), () => go("agenda"), "tab-agenda");
+  dockNotes.append(h("i", { class: "tab-dot" }));
+  const dockMail = dockTab(ICONS.envelope, tl("Mail"), () => go("mail"));
+
+  const gearBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "dock-icon-btn",
+      title: tl("Settings"),
+      onclick: () => {
+        actions.blip();
+        actions.openSettingsWindow();
+      },
+    },
+    svg(ICONS.gearLine, 16, { stroke: 1.7 }),
+  );
+  const soundBtn = h(
+    "button",
+    { type: "button", class: "dock-icon-btn", title: tl("Mute"), onclick: () => actions.toggleSound() },
+    svg(ICONS.speakerLine, 16, { stroke: 1.7 }),
+  );
+  const closeBtn = h(
+    "button",
+    { type: "button", class: "dock-icon-btn close", title: tl("Close"), onclick: () => actions.collapse() },
+    svg(ICONS.xmark, 14),
+  );
+
+  const dockEl = h(
+    "div",
+    { id: "dock" },
+    h("div", { class: "dock-tabs" }, dockPlus, dockHome, dockChat, dockWeather, dockLaunch, dockClips, dockNotes, dockMail),
+    h("div", { class: "dock-actions" }, soundBtn, gearBtn, closeBtn),
+  );
 
   return {
     el,
+    dockEl,
     sync() {
       const v = State.view;
-      tabHome.classList.toggle("on", v === "overview" || v === "empty");
-      tabChat.classList.toggle("on", v === "prompt");
-      tabDrop.classList.toggle("on", v === "upload");
-      tabLaunch.classList.toggle("on", v === "launch");
-      tabAgenda.classList.toggle("on", v === "agenda");
-      tabWeather.classList.toggle("on", v === "weather");
-      tabClipboard.classList.toggle("on", v === "clipboard");
-      const todayPending = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
-      tabAgenda.classList.toggle("has-pending", todayPending > 0);
+      const now = new Date();
+      const dateStr = now.toLocaleDateString(language(), {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+      }).toUpperCase();
+      if (topDate.textContent !== dateStr) topDate.textContent = dateStr;
+
+      const snap = Weather.snapshot;
+      const tempStr = snap ? formatTemp(snap.tempC, Weather.unit) : "";
+      if (topTemp.textContent !== tempStr) topTemp.textContent = tempStr;
+      topTemp.style.display = tempStr ? "" : "none";
+
+      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      if (topClock.textContent !== timeStr) topClock.textContent = timeStr;
+
+      const workingAgent = State.tasks.find((t) => t.source === "agent" && t.state !== "idle");
+      topAgentDot.style.display = workingAgent ? "" : "none";
+      if (workingAgent) topAgentDot.style.background = workingAgent.color;
+
+      dockPlus.classList.toggle("on", v === "upload");
+      dockHome.classList.toggle("on", v === "overview" || v === "empty");
+      dockChat.classList.toggle("on", v === "prompt");
+      dockWeather.classList.toggle("on", v === "weather");
+      dockLaunch.classList.toggle("on", v === "launch");
+      dockClips.classList.toggle("on", v === "clipboard");
+      dockNotes.classList.toggle("on", v === "agenda");
+      dockMail.classList.toggle("on", v === "mail");
+
+      const todayPending = pendingCountForDate(loadAgendaTasks(), dayKey(now));
+      dockNotes.classList.toggle("has-pending", todayPending > 0);
       gearBtn.classList.toggle("on", v === "settings");
       clear(gearBtn);
-      gearBtn.append(v === "settings" ? svg(ICONS.gearFill, 18) : svg(ICONS.gearLine, 18, { stroke: 1.6 }));
+      gearBtn.append(v === "settings" ? svg(ICONS.gearFill, 16) : svg(ICONS.gearLine, 16, { stroke: 1.7 }));
       clear(soundBtn);
-      soundBtn.append(svg(State.settings.soundEnabled ? ICONS.speakerLine : ICONS.speakerSlashLine, 18, { stroke: 1.6 }));
+      soundBtn.append(svg(State.settings.soundEnabled ? ICONS.speakerLine : ICONS.speakerSlashLine, 16, { stroke: 1.7 }));
       closeBtn.style.display = State.pendingApproval ? "none" : "";
       syncPlanPills();
       el.style.opacity = v === "confused" ? "0" : "1";
@@ -213,15 +292,191 @@ export function buildHeader(actions: ViewActions): ViewHost {
     claudePill.el.style.display = claudeOn ? "" : "none";
     codexPill.el.style.display = codexOn ? "" : "none";
     planPills.classList.toggle("on", claudeOn || codexOn);
-    // Both pills: the right side tightens so it still clears the screen edge.
     headerActions.classList.toggle("both-plans", claudeOn && codexOn);
     if (claudeOn) claudePill.sync();
     if (codexOn) codexPill.sync();
-    // Codex is asked when its pill comes into view (stale answers only).
     const shown = codexOn && State.mode === "expanded";
     if (shown && !codexShown) refreshCodexPlanUsage();
     codexShown = shown;
   }
+}
+
+// ── Shared Home Dashboard (Hero Clock + 3 Frosted Cards) ─────────────────────
+
+interface DashHost {
+  el: HTMLElement;
+  sync(tasks: readonly AgentTask[]): void;
+}
+
+function buildHomeDashboard(
+  actions: ViewActions,
+  openTaskDetail: (taskId: string) => void,
+): DashHost {
+  const clockEl = h("div", { class: "dash-clock" });
+  const agentsRow = h("div", { class: "dash-agents" });
+
+  // Card 1: Jobs today (Tasks + Active Agents indicator)
+  const jobsCount = h("div", { class: "dash-jobs-num", text: "0" });
+  const jobsBadge = h("span", { class: "dash-jobs-badge" });
+  const jobsCard = h(
+    "button",
+    {
+      type: "button",
+      class: "dash-card dash-jobs",
+      onclick: () => {
+        actions.blip();
+        actions.setView("agenda");
+      },
+    },
+    h("div", { class: "dash-jobs-top" }, jobsCount, jobsBadge),
+    h("div", { class: "dash-card-sub", text: tl("Jobs today") }),
+  );
+
+  // Card 2: Media / Spotify
+  const mediaArt = h("img", { class: "dash-media-art", alt: "" }) as HTMLImageElement;
+  const mediaFallback = h("div", { class: "dash-media-art empty" }, svg(ICONS.musicNote, 15));
+  const mediaTitle = h("div", { class: "dash-media-title" });
+  const mediaSub = h("div", { class: "dash-media-sub" });
+  const mediaPlayBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "dash-round-btn media",
+      onclick: (e: Event) => {
+        e.stopPropagation();
+        actions.blip();
+        togglePlay();
+      },
+    },
+    svg(ICONS.play, 12),
+  );
+  const mediaCard = h(
+    "div",
+    {
+      class: "dash-card dash-media",
+      onclick: () => {
+        actions.blip();
+        openTaskDetail(SPOTIFY_ID);
+      },
+    },
+    h("div", { class: "dash-media-left" }, mediaArt, mediaFallback, h("div", { class: "dash-media-meta" }, mediaTitle, mediaSub)),
+    mediaPlayBtn,
+  );
+
+  // Card 3: Focus / Airadoro
+  const focusClock = h("div", { class: "dash-focus-time", text: "25:00" });
+  const focusSub = h("div", { class: "dash-focus-sub" });
+  const focusPlayBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "dash-round-btn focus",
+      onclick: (e: Event) => {
+        e.stopPropagation();
+        actions.blip();
+        const snap = Airadoro.snapshot;
+        if (snap.phase === "idle") Airadoro.startForTask("");
+        else if (snap.paused) Airadoro.resume();
+        else Airadoro.pause();
+      },
+    },
+    svg(ICONS.play, 12),
+  );
+  const focusCard = h(
+    "div",
+    {
+      class: "dash-card dash-focus",
+      onclick: () => {
+        actions.blip();
+        openTaskDetail(AIRADORO_ID);
+      },
+    },
+    h("div", { class: "dash-focus-meta" }, focusClock, focusSub),
+    focusPlayBtn,
+  );
+
+  const cardsRow = h("div", { class: "dash-grid" }, jobsCard, mediaCard, focusCard);
+  const el = h("div", { class: "dash-wrap" }, clockEl, agentsRow, cardsRow);
+  let lastAgentKey = "";
+
+  return {
+    el,
+    sync(tasks: readonly AgentTask[]) {
+      const now = new Date();
+      const hh = String(now.getHours());
+      const mm = String(now.getMinutes()).padStart(2, "0");
+      const heroTime = `${hh}:${mm}`;
+      if (clockEl.textContent !== heroTime) clockEl.textContent = heroTime;
+
+      const pendingToday = pendingCountForDate(loadAgendaTasks(), dayKey(now));
+      jobsCount.textContent = String(pendingToday);
+
+      const runningAgents = tasks.filter((t) => !t.isIntegration && t.state !== "idle");
+      jobsBadge.style.display = runningAgents.length > 0 ? "" : "none";
+      if (runningAgents.length > 0) jobsBadge.textContent = `${runningAgents.length}`;
+
+      const pillTasks = tasks.filter((t) => t.id !== SPOTIFY_ID && t.id !== AIRADORO_ID).slice(0, 4);
+      const aKey = pillTasks.map((t) => `${t.id}:${t.state}:${t.color}:${t.pillBadge ?? ""}`).join("|");
+      if (aKey !== lastAgentKey) {
+        lastAgentKey = aKey;
+        clear(agentsRow);
+        for (const t of pillTasks) {
+          const btnEl = h(
+            "button",
+            {
+              type: "button",
+              class: t.state !== "idle" ? "dash-agent-chip active" : "dash-agent-chip",
+              onclick: () => {
+                actions.blip();
+                openTaskDetail(t.id);
+              },
+            },
+            dot(t.color, 6),
+            h("span", { text: t.name }),
+          );
+          agentsRow.append(btnEl);
+        }
+        agentsRow.style.display = pillTasks.length > 0 ? "" : "none";
+      }
+
+      // Sync Spotify card
+      const sp = Spotify.state;
+      const track = sp.track;
+      const art = currentArtwork(sp);
+      if (art) {
+        mediaArt.src = art;
+        mediaArt.style.display = "";
+        mediaFallback.style.display = "none";
+      } else {
+        mediaArt.style.display = "none";
+        mediaFallback.style.display = "";
+      }
+      mediaTitle.textContent = track?.title || t("No media");
+      mediaSub.textContent = track?.artist || "Spotify";
+      clear(mediaPlayBtn);
+      mediaPlayBtn.append(svg(sp.playing ? ICONS.pause : ICONS.play, 11));
+      mediaPlayBtn.classList.toggle("playing", sp.playing);
+
+      // Sync Airadoro Focus card
+      const snap = Airadoro.snapshot;
+      const rem = snap.phase === "idle" ? null : Airadoro.remaining();
+      const focusTimeStr = rem != null ? AiradoroEngine.clock(rem) : "25:00";
+      focusClock.textContent = focusTimeStr;
+      const focusStateStr =
+        snap.phase === "idle"
+          ? `${t("Focus")}, ${t("Ready").toLowerCase()}`
+          : snap.paused
+            ? `${t("Focus")}, ${t("Pause").toLowerCase()}`
+            : snap.phase === "rest"
+              ? t("Pause")
+              : t("Focus");
+      focusSub.textContent = focusStateStr;
+      clear(focusPlayBtn);
+      const activeFocus = snap.phase !== "idle" && !snap.paused;
+      focusPlayBtn.append(svg(activeFocus ? ICONS.pause : ICONS.play, 11));
+      focusPlayBtn.classList.toggle("playing", activeFocus);
+    },
+  };
 }
 
 // ── Overview ──────────────────────────────────────────────────────────────────
@@ -247,12 +502,33 @@ function buildOverview(actions: ViewActions): ViewHost {
     { class: "icon-btn jump", title: tl("Open"), onclick: () => actions.openTarget() },
     svg(ICONS.arrowUpRight, 12),
   );
-  const left = card(null, leftBody, jump);
+  const backDashBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "dash-back-pill",
+      onclick: () => {
+        actions.blip();
+        overviewScreen = "dash";
+        closeDiff();
+        closePlanCard();
+        State.notify();
+      },
+    },
+    svg(ICONS.chevronLeft, 10, { stroke: 2 }),
+    h("span", { text: tl("Home") }),
+  );
+  const left = card(null, leftBody, jump, backDashBtn);
   const pills = h("div", { class: "pills" });
   const right = card(null, pills);
+  const dash = buildHomeDashboard(actions, (taskId) => {
+    overviewScreen = "detail";
+    actions.setFocus(taskId);
+  });
   // Opened from a plan pill in the header: stands in for the left card.
   const plan = new PlanCard();
   let planTimer: number | null = null;
+  let focusDashTimer: number | null = null;
   // Spotify's card and pill are kept and updated in place: the progress bar
   // runs on, and a slider being dragged must not be rebuilt under the pointer.
   const spotifyCard = buildSpotifyCard();
@@ -268,18 +544,25 @@ function buildOverview(actions: ViewActions): ViewHost {
     holdOpen: (on) => actions.holdOpen(on),
   });
 
-  const el = h("div", { class: "view overview" },
-    h("div", { class: "left" }, left),
-    h("div", { class: "right" }, right),
-  );
+  const detailRow = h("div", { class: "overview-detail" }, h("div", { class: "left" }, left), h("div", { class: "right" }, right));
+  const el = h("div", { class: "view overview is-dash" }, dash.el, detailRow);
 
   let pillIds = "";
   let detailOpen = false;
+  let overviewScreen: "dash" | "detail" = "dash";
+  let initialized = false;
   let lastFocus: string | null = null;
   let mode: "ticker" | "card" | "plan" | "diff" | "spotify" | "whatsapp" | "mail" | "airadoro" | null = null;
   let cardKey = "";
   /** The list row highlighted at the last sync, to scroll only when it moves. */
   let shownSelection: number | null = null;
+
+  window.addEventListener("aira:dash-home", () => {
+    overviewScreen = "dash";
+    closeDiff();
+    closePlanCard();
+    if (State.view === "overview") State.notify();
+  });
 
   // Leaving the overview or folding the island closes the diff, as on macOS.
   State.subscribe(() => {
@@ -329,10 +612,26 @@ function buildOverview(actions: ViewActions): ViewHost {
     }, 30_000);
   }
 
+  function syncFocusDashTimer(run: boolean) {
+    if (!run) {
+      if (focusDashTimer != null) window.clearInterval(focusDashTimer);
+      focusDashTimer = null;
+      return;
+    }
+    if (focusDashTimer != null) return;
+    focusDashTimer = window.setInterval(() => {
+      if (State.mode === "expanded" && (State.view === "overview" || State.view === "empty") && Airadoro.snapshot.phase !== "idle" && !Airadoro.snapshot.paused) {
+        dash.sync(State.tasks);
+      } else {
+        syncFocusDashTimer(false);
+      }
+    }, 1000);
+  }
+
   return {
     el,
     tick(nowMs: number) {
-      if (mode !== "ticker") return false;
+      if (overviewScreen !== "detail" || mode !== "ticker") return false;
       ticker.tick(nowMs);
       return ticker.animating;
     },
@@ -353,22 +652,23 @@ function buildOverview(actions: ViewActions): ViewHost {
       const diffs = task ? State.sessionDiffs.get(task.id) : undefined;
       const last = diffs?.[diffs.length - 1];
       if (last?.id == null) return;
+      overviewScreen = "detail";
       activeDiffId = last.id;
       State.notify();
     },
     sync() {
       const task = State.focusTask;
-      if (task?.id !== lastFocus) {
+      if (!initialized) {
+        initialized = true;
+        lastFocus = task?.id ?? null;
+      } else if (task?.id !== lastFocus) {
         lastFocus = task?.id ?? null;
         detailOpen = false;
         activeDiffId = null;
         cardKey = "";
         mode = null;
+        if (task) overviewScreen = "detail";
       }
-
-      // A workspace or agent pill with a live session keeps the ticker; every
-      // other pill shows its own card, exactly like IntegrationCardView.
-      const sessionActive = task != null && hasSessionTicker(task);
 
       const planOpen = planCardOpen();
       if (mode === "plan" && !planOpen) {
@@ -380,6 +680,22 @@ function buildOverview(actions: ViewActions): ViewHost {
       // A diff that has since been dropped (cap, expiry, session end) just closes.
       const diff = task && activeDiffId != null ? State.findDiff(task.id, activeDiffId) : null;
       if (!diff) activeDiffId = null;
+
+      if (planOpen || diff != null) overviewScreen = "detail";
+
+      const isDash = overviewScreen === "dash";
+      el.classList.toggle("is-dash", isDash);
+      el.classList.toggle("is-detail", !isDash);
+      syncFocusDashTimer(isDash && State.mode === "expanded" && Airadoro.snapshot.phase !== "idle" && !Airadoro.snapshot.paused);
+
+      if (isDash) {
+        dash.sync(State.tasks);
+        return;
+      }
+
+      // A workspace or agent pill with a live session keeps the ticker; every
+      // other pill shows its own card, exactly like IntegrationCardView.
+      const sessionActive = task != null && hasSessionTicker(task);
 
       if (planOpen) {
         if (mode !== "plan") {
@@ -567,19 +883,81 @@ function lighten(hex: string, amount: number): string {
 // ── Empty ─────────────────────────────────────────────────────────────────────
 
 function buildEmpty(actions: ViewActions): ViewHost {
-  const body = h(
-    "div",
-    { class: "stack", style: "padding:0 18px 0 118px;flex-direction:row;align-items:center;gap:16px" },
-    h(
-      "div",
-      { style: "display:flex;flex-direction:column;gap:5px" },
-      h("div", { class: "title", text: tl("Nothing running right now.") }),
-      h("div", { class: "sub", text: tl("Drop a file or window, or ask me anything.") }),
-    ),
-    h("div", { class: "grow" }),
-    btn(tl("Ask Claude"), "primary", () => actions.setView("prompt")),
-  );
-  return { el: h("div", { class: "view" }, card(null, body)), sync() {} };
+  const dash = buildHomeDashboard(actions, (taskId) => {
+    actions.setFocus(taskId);
+    actions.setView("overview");
+  });
+  const el = h("div", { class: "view overview is-dash empty-dash" }, dash.el);
+  return {
+    el,
+    sync() {
+      dash.sync(State.tasks);
+    },
+  };
+}
+
+// ── Mail Dashboard (3-card inbox overview) ───────────────────────────────────
+
+function buildMailView(actions: ViewActions): ViewHost {
+  const openFullMail = () => {
+    actions.blip();
+    actions.setFocus(MAIL_ID);
+    actions.setView("overview");
+  };
+
+  function makeMailCard(label: Msg, accent: string): { cardEl: HTMLElement; numEl: HTMLElement; subEl: HTMLElement } {
+    const numEl = h("div", { class: "mail-dash-num", text: "0" });
+    const subEl = h("div", { class: "mail-dash-sub", text: label });
+    const cardEl = h(
+      "button",
+      {
+        type: "button",
+        class: `mail-dash-card ${accent}`,
+        onclick: openFullMail,
+      },
+      h("div", { class: "mail-dash-top" }, h("span", { class: "mail-dash-title", text: label }), h("span", { class: "mail-dash-arrow" }, svg(ICONS.arrowUpRight, 11))),
+      h("div", { class: "mail-dash-metrics" }, numEl, subEl),
+    );
+    return { cardEl, numEl, subEl };
+  }
+
+  const cUnread = makeMailCard(tl("Unread"), "unread");
+  const cImportant = makeMailCard(tl("Important"), "important");
+  const cInbox = makeMailCard(tl("Inbox"), "inbox");
+  const previewEl = h("div", { class: "mail-dash-preview" });
+  const cards = h("div", { class: "mail-dash-grid" }, cUnread.cardEl, cImportant.cardEl, cInbox.cardEl);
+  const el = h("div", { class: "view mail-dash-view" }, h("div", { class: "mail-dash-shell" }, cards, previewEl));
+
+  return {
+    el,
+    sync() {
+      const info = State.integrations[MAIL_ID];
+      const data = info?.data as unknown as MailCardData | undefined;
+      const msgs = data?.messages ?? [];
+      const unreadCount = data?.unread ?? 0;
+      const importantCount = msgs.filter((m) => m.flagged).length;
+      const totalCount = msgs.length;
+
+      cUnread.numEl.textContent = String(unreadCount);
+      cImportant.numEl.textContent = String(importantCount);
+      cInbox.numEl.textContent = String(totalCount);
+
+      const latest = msgs.find((m) => m.unread) ?? msgs[0];
+      clear(previewEl);
+      if (latest) {
+        previewEl.append(
+          dot("#2F8CFF", 6),
+          h("span", { class: "mail-dash-sender", text: latest.senderName || latest.address }),
+          h("span", { class: "mail-dash-subj", text: latest.subject }),
+        );
+      } else {
+        previewEl.append(
+          dot(data?.running ? "#22C55E" : "#64748B", 6),
+          h("span", { class: "mail-dash-subj", text: data?.running ? t("Inbox") : "Outlook" }),
+        );
+      }
+    },
+  };
 }
 
 // ── Approval ──────────────────────────────────────────────────────────────────
@@ -814,7 +1192,7 @@ function buildConfused(): ViewHost {
     h("div", { class: "title", text: tl("Too many hits at once.") }),
     h("div", { class: "sub", text: tl("Give me a sec — back to work in three seconds.") }),
   );
-  return { el: h("div", { class: "view" }, card("pink", body)), sync() {} };
+  return { el: h("div", { class: "view" }, card("pink", body)), sync() { } };
 }
 
 // ── Note ──────────────────────────────────────────────────────────────────────
@@ -903,7 +1281,7 @@ function buildPlaceholder(title: Msg, sub: string): ViewHost {
     h("div", { class: "title", text: title }),
     h("div", { class: "sub", text: sub }),
   );
-  return { el: h("div", { class: "view" }, card(null, body)), sync() {} };
+  return { el: h("div", { class: "view" }, card(null, body)), sync() { } };
 }
 
 // ── Registry ──────────────────────────────────────────────────────────────────
@@ -935,8 +1313,8 @@ export function buildViews(
   map.set("reminder", buildReminderView(actions));
   map.set("weather", buildWeatherView(actions));
   map.set("clipboard", buildClipboardView(actions));
-  // Not in the Windows v1: sending a file by email, window attach + web result.
-  map.set("mail", buildPlaceholder(tl("Sending by email isn't in this version."), ""));
+  map.set("mail", buildMailView(actions));
+  // Not in the Windows v1: web search & web result.
   map.set("searching", buildPlaceholder(tl("Claude is searching…"), ""));
   map.set("result", buildPlaceholder(tl("Result"), ""));
   return map;

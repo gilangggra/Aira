@@ -130,6 +130,8 @@ export interface Settings {
   islandScale?: string;
   /** Visual style: "solid" (OLED black), "glass" (acrylic blur), "translucent". */
   islandStyle?: string;
+  /** Layout shape: "notch" (attached to top bezel, default) or "island" (floating Dynamic Island). */
+  islandShape?: string;
   absenceInterval: number;
   /** Declared pills next to the main one (at most 4), in the order they were added. */
   activeIntegrations: string[];
@@ -205,7 +207,8 @@ export const DEFAULT_SETTINGS: Settings = {
   closedIsland: "mochi",
   islandPosition: "top",
   islandScale: "normal",
-  islandStyle: "solid",
+  islandStyle: "glass",
+  islandShape: "notch",
   absenceInterval: 180,
   activeIntegrations: [
     "integration_resend", "integration_n8n", "integration_vercel", "integration_github",

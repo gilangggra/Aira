@@ -56,10 +56,17 @@ export interface PhoneRelayStatus {
   url: string;
   hasAccess: boolean;
   state: PhoneRelayState;
+  /** The relay settings are shown: for testers (AIRA_RELAY_SETTINGS=1 / COUCOU_RELAY_SETTINGS=1), or when a relay is already on. */
+  shown: boolean;
 }
 
 /** Session details for the phone: the switch (off by default). */
 export interface PhoneDetailsStatus {
+  enabled: boolean;
+}
+
+/** Starting a Claude Code session from the phone: the switch (off by default). */
+export interface PhoneLaunchStatus {
   enabled: boolean;
 }
 
@@ -374,6 +381,11 @@ export const Bridge = {
   phoneRecapStatus: () => call<PhoneRecapStatus>("phone_recap_status"),
   phoneRecapSetEnabled: (enabled: boolean) => callOrThrow<PhoneRecapStatus>("phone_recap_set_enabled", { enabled }),
   phoneLinkPublishRecap: (recap: PhoneLinkRecap | null) => call<void>("phone_link_publish_recap", { recap: recap ?? {} }),
+  phoneLaunchStatus: () => call<PhoneLaunchStatus>("phone_launch_status"),
+  /** "Let the phone start Claude Code sessions" (settings window only). */
+  phoneLaunchSetEnabled: (enabled: boolean) => callOrThrow<PhoneLaunchStatus>("phone_launch_set_enabled", { enabled }),
+  /** The island's projects, as paths: Rust tells a phone their folder names only, and keeps the paths. */
+  phoneLinkPublishProjects: (projects: string[]) => call<void>("phone_link_publish_projects", { projects }),
   phoneChatStatus: () => call<PhoneChatStatus>("phone_chat_status"),
   /** Off by default; only from the switch in Settings. Phones are reconnected so they learn about it. */
   phoneChatSetEnabled: (enabled: boolean) => callOrThrow<PhoneChatStatus>("phone_chat_set_enabled", { enabled }),
@@ -620,11 +632,12 @@ export interface DroppedFile {
 
 export interface HookStatus {
   installed: boolean;
-  /** Coucou's status line relay (plan usage) is the status line in settings.json. */
+  /** Aira's status line relay (plan usage) is the status line in settings.json. */
   planRelayInstalled: boolean;
   settingsPath: string;
   hookPath: string;
   hookReady: boolean;
+  relayError?: string | null;
 }
 
 /** One agent other than Claude Code, as agents.rs reports it. */

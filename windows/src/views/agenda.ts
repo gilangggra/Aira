@@ -31,6 +31,7 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
   let month = new Date(today.getFullYear(), today.getMonth(), 1);
   let selectedDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   let editingId: string | null = null;
+  let showCalendar = false;
 
   const calColumn = h("div", { class: "agenda-cal" });
   const tasksColumn = h("div", { class: "agenda-tasks" });
@@ -264,6 +265,50 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
     clear(calColumn);
     const todayKey = dayKey(today);
     const selectedKey = dayKey(selectedDate);
+    const dayTasks = tasksForDay(tasks, selectedKey);
+    const totalCount = dayTasks.length;
+    const doneCount = dayTasks.filter((item) => item.completed).length;
+
+    if (!showCalendar) {
+      const counterEl = h(
+        "div",
+        { class: "agenda-counter" },
+        h("span", { class: "agenda-counter-done", text: String(doneCount) }),
+        h("span", { class: "agenda-counter-sep", text: "/" }),
+        h("span", { class: "agenda-counter-total", text: String(totalCount) }),
+      );
+      const bars = h("div", { class: "agenda-progress-bars" });
+      const barCount = Math.max(1, Math.min(8, totalCount || 3));
+      for (let i = 0; i < barCount; i++) {
+        const filled = totalCount > 0 && i < Math.round((doneCount / totalCount) * barCount);
+        bars.append(h("span", { class: filled ? "agenda-pbar on" : "agenda-pbar" }));
+      }
+      const calToggle = h(
+        "button",
+        {
+          type: "button",
+          class: "agenda-cal-toggle",
+          onclick: () => {
+            actions.blip();
+            showCalendar = true;
+            renderCalendar();
+          },
+        },
+        svg(ICONS.calendar, 11, { stroke: 1.8 }),
+        h("span", { text: tl("Show calendar") }),
+      );
+      const summaryBox = h(
+        "div",
+        { class: "agenda-summary" },
+        h("div", { class: "agenda-summary-kicker", text: tl("Completed") }),
+        counterEl,
+        bars,
+        calToggle,
+      );
+      calColumn.append(summaryBox);
+      return;
+    }
+
     const summary = taskSummaryByDay(tasks);
 
     const prevBtn = h(
@@ -311,7 +356,22 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
       svg(ICONS.chevronRight, 12, { stroke: 2 }),
     );
 
-    const nav = h("div", { class: "agenda-cal-nav" }, prevBtn, monthLabel, nextBtn);
+    const backCounterBtn = h(
+      "button",
+      {
+        type: "button",
+        class: "agenda-nav-btn agenda-counter-back",
+        title: tl("Back"),
+        onclick: () => {
+          actions.blip();
+          showCalendar = false;
+          renderCalendar();
+        },
+      },
+      svg(ICONS.chevronLeft, 11, { stroke: 2 }),
+    );
+
+    const nav = h("div", { class: "agenda-cal-nav" }, backCounterBtn, prevBtn, monthLabel, nextBtn);
 
     const weekdays = h("div", { class: "cal-weekdays agenda-weekdays" });
     for (let d = 0; d < 7; d++) {
