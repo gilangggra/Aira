@@ -60,7 +60,7 @@ export interface ViewLayout {
 // The window is a fixed 720×320 (largest view) like the macOS panel; the island is
 // drawn inside it, glued to the top edge and horizontally centred.
 export const PANEL_W = 720;
-export const PANEL_H = 320;
+export const PANEL_H = 380;
 
 // No notch on a PC: these are the hidden/compact sizes from docs/SPEC.md.
 export const NOTCH_W = 184;
@@ -68,53 +68,53 @@ export const NOTCH_H = 32;
 export const COMPACT_W = 288; // NOTCH_W + 104
 export const EXPANDED_W = 640;
 
-export const ROUNDED_CORNER = 14; // hidden / compact
-export const EXPANDED_CORNER = 22;
+export const ROUNDED_CORNER = 16; // hidden / compact
+export const EXPANDED_CORNER = 26;
 
 /** Invisible hover strip that wakes the island when hidden. */
 export const WAKE_STRIP_W = 240;
 export const WAKE_STRIP_H = 6;
 
 export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
-  overview: { height: 160, botX: 68, botY: null, botDiameter: 58, agentMode: "pills" },
-  empty: { height: 160, botX: 70, botY: null, botDiameter: 62, agentMode: "none" },
-  approval: { height: 160, botX: 62, botY: null, botDiameter: 56, agentMode: "column" },
-  question: { height: 160, botX: 62, botY: null, botDiameter: 56, agentMode: "column" },
-  error: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
-  finished: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
-  confused: { height: 160, botX: 76, botY: null, botDiameter: 66, agentMode: "column" },
-  upload: { height: 176, botX: 140, botY: 104, botDiameter: 62, agentMode: "column" },
+  overview: { height: 306, botX: 320, botY: 19, botDiameter: 22, agentMode: "pills" },
+  empty: { height: 304, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
+  approval: { height: 212, botX: 62, botY: null, botDiameter: 56, agentMode: "column" },
+  question: { height: 212, botX: 62, botY: null, botDiameter: 56, agentMode: "column" },
+  error: { height: 212, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
+  finished: { height: 212, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
+  confused: { height: 212, botX: 76, botY: null, botDiameter: 66, agentMode: "column" },
+  upload: { height: 220, botX: 140, botY: 104, botDiameter: 62, agentMode: "column" },
   // botY 103 = bar top (42 + 58) + 3, so the dot really rides the bar. The Swift
   // layout says 118 while its own comment says 103; the comment matches the spec.
-  uploading: { height: 176, botX: 46, botY: 103, botDiameter: 20, agentMode: "none" },
-  choose: { height: 176, botX: 60, botY: 101, botDiameter: 52, agentMode: "column" },
-  mail: { height: 240, botX: 56, botY: null, botDiameter: 46, agentMode: "column" },
-  prompt: { height: 160, botX: 52, botY: null, botDiameter: 44, agentMode: "column" },
-  searching: { height: 160, botX: 52, botY: null, botDiameter: 44, agentMode: "column" },
-  result: { height: 160, botX: 52, botY: null, botDiameter: 44, agentMode: "column" },
-  note: { height: 160, botX: 60, botY: null, botDiameter: 50, agentMode: "column" },
-  settings: { height: 160, botX: 54, botY: null, botDiameter: 46, agentMode: "none" },
+  uploading: { height: 220, botX: 46, botY: 103, botDiameter: 20, agentMode: "none" },
+  choose: { height: 220, botX: 60, botY: 101, botDiameter: 52, agentMode: "column" },
+  mail: { height: 292, botX: 320, botY: 19, botDiameter: 22, agentMode: "column" },
+  prompt: { height: 308, botX: 320, botY: 19, botDiameter: 22, agentMode: "column" },
+  searching: { height: 224, botX: 52, botY: null, botDiameter: 44, agentMode: "column" },
+  result: { height: 236, botX: 52, botY: null, botDiameter: 44, agentMode: "column" },
+  note: { height: 212, botX: 60, botY: null, botDiameter: 50, agentMode: "column" },
+  settings: { height: 276, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
   greeting: { height: 150, botX: 320, botY: 90, botDiameter: 0, agentMode: "none" },
   // Mac: 160. The extra 24 hold the two lines with top agent, project, busiest
   // day, longest session, permissions and questions, which the Mac card leaves
   // to the shared image.
-  recap: { height: 184, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
-  wardrobe: { height: 160, botX: 68, botY: null, botDiameter: 58, agentMode: "none" },
+  recap: { height: 280, botX: 320, botY: 19, botDiameter: 22, agentMode: "column" },
+  wardrobe: { height: 272, botX: 68, botY: null, botDiameter: 58, agentMode: "none" },
   // New version: Mochi on the left, the version and Update now (Mac: .update).
-  update: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
+  update: { height: 212, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
   // After an update: what the new version brings, then "Your Coucou so far".
   // Taller than a card, for two rows of items with their line.
-  whatsNew: { height: 222, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
+  whatsNew: { height: 244, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
   // A new Claude Code session: Mochi on the left, the project and the prompt (Mac: .launch).
-  launch: { height: 160, botX: 58, botY: null, botDiameter: 52, agentMode: "none" },
-  // Daily calendar & task planner: Mochi on the left, mini-calendar + daily tasks on the right.
-  agenda: { height: 248, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
+  launch: { height: 272, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
+  // Daily calendar & task planner: top bar Mochi, Notes split view below.
+  agenda: { height: 308, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
   // Scheduled task reminder pop-up: Mochi on the left, task + Done / Snooze buttons on the right.
-  reminder: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
-  // Live local weather & air quality: Mochi on the left, atmospheric card + forecast on the right.
-  weather: { height: 292, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
-  // Clipboard history manager: Mochi on the left, searchable & pinnable clip list on the right.
-  clipboard: { height: 264, botX: 52, botY: null, botDiameter: 44, agentMode: "none" },
+  reminder: { height: 212, botX: 62, botY: null, botDiameter: 58, agentMode: "none" },
+  // Live local weather & air quality: top bar Mochi, atmospheric card + forecast below.
+  weather: { height: 356, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
+  // Clipboard history manager: top bar Mochi, clean clip list below.
+  clipboard: { height: 306, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
 };
 
 // The upload views above are only the fallback geometry. Once a file is actually
@@ -122,13 +122,13 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
 // owns its own constants (USC) straight from UploadSequenceEngine.swift.
 
 /** The question view with options to pick from: room for two rows of them. */
-export const QUESTION_PICKER_H = 200;
+export const QUESTION_PICKER_H = 236;
 
 /** Active sub-panel inside the chat view that needs full browsing height. */
 export type ChatOverlay = "none" | "picker" | "history";
 
 /** Minimum expanded height when the chat model picker or history panel is open. */
-export const CHAT_OVERLAY_H = 320;
+export const CHAT_OVERLAY_H = 340;
 
 /** Chat view grows with the conversation — IslandContainer.chatPromptHeight. */
 export function chatPromptHeight(messageCount: number): number {

@@ -126,6 +126,7 @@ pub fn setup(app: &AppHandle) {
     speech::set_prefs(&prefs.engine, &prefs.language);
     pill::update(app, |s| {
         s.edge = pill::edge_name(prefs.edge).into();
+        s.hide_idle = prefs.hide_pill;
         s.key = key_id(prefs.key, &prefs.key_combo);
     });
     if prefs.enabled {
@@ -511,6 +512,7 @@ pub fn flow_set_prefs(app: AppHandle, flow: State<Arc<Flow>>, prefs: Prefs) {
     };
     pill::update(&app, |s| {
         s.edge = pill::edge_name(prefs.edge).into();
+        s.hide_idle = prefs.hide_pill;
         s.key = key_id(prefs.key, &prefs.key_combo);
     });
     speech::set_prefs(&prefs.engine, &prefs.language);
