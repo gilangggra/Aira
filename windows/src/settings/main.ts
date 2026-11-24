@@ -25,6 +25,7 @@ import { claudeModelControl } from "./claude-models";
 import { agentsSection } from "./agents";
 import { phoneSection } from "./phone";
 import { whatsappSection } from "./whatsapp";
+import { converterSection } from "./converter";
 import { WHATSAPP_ID } from "../core/whatsapp";
 import {
   AIRADORO_STORAGE_REST, AIRADORO_STORAGE_WORK, DEFAULT_REST_MINUTES, DEFAULT_WORK_MINUTES,
@@ -1791,7 +1792,7 @@ async function render() {
     pills: () => [activePillsSection(connected)],
     agents: () => [claudeSection(status), agentsSection(agents), planSection(status)],
     chat: () => [subscriptionsSection(), apiSection(hasKey, claudeRelay), chatProvidersSection(chatKeys, keyChanged), localSection(customKey)],
-    integrations: () => [integrationsSection(present), ...whatsappSections()],
+    integrations: () => [integrationsSection(present), converterSection(), ...whatsappSections()],
     phone: () => [phoneSection(settings.phoneLink ?? false, toggle, settings)],
     shortcuts: () => [shortcutsSection(shortcutReport)],
   };

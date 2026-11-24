@@ -32,20 +32,63 @@ pub fn inbox_dir() -> PathBuf {
 // elsewhere (lib.rs). Each is good once, for a couple of minutes.
 
 const DROP_VALID_FOR: Duration = Duration::from_secs(120);
+const SOURCE_VALID_FOR: Duration = Duration::from_secs(30 * 60);
 const DROP_MAX_PENDING: usize = 64;
 
 static DROPPED: std::sync::Mutex<Vec<(String, std::time::Instant)>> = std::sync::Mutex::new(Vec::new());
+static SOURCES: std::sync::Mutex<Vec<(String, std::time::Instant)>> = std::sync::Mutex::new(Vec::new());
 
-/// Records paths that came from a real drop.
-pub fn allow_dropped<I: IntoIterator<Item = String>>(paths: I) {
-    let mut list = DROPPED.lock().unwrap_or_else(|e| e.into_inner());
-    let now = std::time::Instant::now();
-    list.retain(|(_, at)| now.duration_since(*at) < DROP_VALID_FOR);
-    for p in paths {
-        list.push((p, now));
+fn record_bounded(list: &mut Vec<(String, std::time::Instant)>, path: String, now: std::time::Instant, ttl: Duration) {
+    list.retain(|(_, at)| now.duration_since(*at) < ttl);
+    if !list.iter().any(|(p, _)| p == &path) {
+        list.push((path, now));
     }
     let excess = list.len().saturating_sub(DROP_MAX_PENDING);
     list.drain(..excess);
+}
+
+/// Records paths that came from a real drop.
+pub fn allow_dropped<I: IntoIterator<Item = String>>(paths: I) {
+    let now = std::time::Instant::now();
+    let collected: Vec<String> = paths.into_iter().collect();
+    {
+        let mut list = DROPPED.lock().unwrap_or_else(|e| e.into_inner());
+        list.retain(|(_, at)| now.duration_since(*at) < DROP_VALID_FOR);
+        for p in &collected {
+            list.push((p.clone(), now));
+        }
+        let excess = list.len().saturating_sub(DROP_MAX_PENDING);
+        list.drain(..excess);
+    }
+    {
+        let mut src = SOURCES.lock().unwrap_or_else(|e| e.into_inner());
+        for p in collected {
+            record_bounded(&mut src, p, now, SOURCE_VALID_FOR);
+        }
+    }
+}
+
+/// Records a user-picked or converted path so converter commands can read/reveal it.
+pub fn allow_source(path: String) {
+    let mut src = SOURCES.lock().unwrap_or_else(|e| e.into_inner());
+    record_bounded(&mut src, path, std::time::Instant::now(), SOURCE_VALID_FOR);
+}
+
+/// True when `path` came from a real drop, an OS file picker, a conversion output,
+/// or already sits inside Aira's inbox directory.
+pub fn is_allowed_source(path: &str) -> bool {
+    let now = std::time::Instant::now();
+    {
+        let mut src = SOURCES.lock().unwrap_or_else(|e| e.into_inner());
+        src.retain(|(_, at)| now.duration_since(*at) < SOURCE_VALID_FOR);
+        if src.iter().any(|(p, _)| p == path) {
+            return true;
+        }
+    }
+    if let (Ok(canon), Ok(inbox)) = (std::fs::canonicalize(path), std::fs::canonicalize(inbox_dir())) {
+        return canon.starts_with(&inbox);
+    }
+    false
 }
 
 /// True (once) when `path` was delivered by a drop in the last couple of minutes.

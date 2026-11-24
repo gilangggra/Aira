@@ -411,12 +411,24 @@ async fn download_all(app: &AppHandle, target_engine: &str) -> Result<(), String
     Ok(())
 }
 
-/// Deletes the models (Settings → Remove the models).
-pub fn remove(app: &AppHandle) {
+/// Deletes the speech models (Settings → Uninstall / Remove the models).
+/// When `engine` is `Some("parakeet")` or `Some("whisper")`, removes only that
+/// engine's directory; when `None`, removes all speech and diarizer models.
+pub fn remove(app: &AppHandle, engine: Option<&str>) {
     unload();
-    let _ = std::fs::remove_dir_all(PARAKEET.dir());
-    let _ = std::fs::remove_dir_all(WHISPER.dir());
-    let _ = std::fs::remove_dir_all(DIARIZER.dir());
+    match engine {
+        Some("parakeet") => {
+            let _ = std::fs::remove_dir_all(PARAKEET.dir());
+        }
+        Some("whisper") => {
+            let _ = std::fs::remove_dir_all(WHISPER.dir());
+        }
+        _ => {
+            let _ = std::fs::remove_dir_all(PARAKEET.dir());
+            let _ = std::fs::remove_dir_all(WHISPER.dir());
+            let _ = std::fs::remove_dir_all(DIARIZER.dir());
+        }
+    }
     downloads().lock().unwrap().error = None;
     emit_status(app);
 }

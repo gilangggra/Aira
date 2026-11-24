@@ -5,6 +5,7 @@
 // action the spec asks for: ask a question about it.
 
 import { h, clear } from "./dom";
+import { isConvertibleFileName } from "../core/converter";
 import { State } from "../core/state";
 import type { ViewActions, ViewHost } from "./views";
 import { N_, t, tl } from "../i18n/i18n";
@@ -28,7 +29,7 @@ function dashedFrame(): SVGSVGElement {
   return el;
 }
 
-export function buildUpload(): ViewHost {
+export function buildUpload(actions?: ViewActions): ViewHost {
   const frame = dashedFrame();
   const title = h("div", { class: "drop-title", text: tl("Drop your files here") });
   const tags = h(
@@ -36,11 +37,19 @@ export function buildUpload(): ViewHost {
     { class: "drop-tags" },
     ...[N_("PDF"), N_("Images"), N_("Code"), N_("Docs")].map((chip) => h("span", { text: tl(chip) })),
   );
+  const pickBtn = actions?.pickConvertFile
+    ? h("button", {
+        type: "button",
+        class: "drop-pick-btn",
+        text: tl("Choose file…"),
+        onclick: () => actions.pickConvertFile?.(),
+      })
+    : null;
   const card = h(
     "div",
     { class: "card drop-card" },
     frame,
-    h("div", { class: "drop-body" }, title, tags),
+    h("div", { class: "drop-body" }, title, tags, pickBtn),
   );
   const el = h("div", { class: "view" }, card);
 
@@ -87,6 +96,11 @@ export function buildUploading(): ViewHost {
 export function buildChoose(actions: ViewActions): ViewHost {
   const title = h("div", { class: "title" });
   const sub = h("div", { class: "sub", text: tl("What do you want to do with it?") });
+  const convertBtn = h("button", {
+    class: "btn secondary",
+    text: tl("Convert"),
+    onclick: () => actions.setView("convert"),
+  });
   const row = h(
     "div",
     { class: "actions" },
@@ -95,6 +109,7 @@ export function buildChoose(actions: ViewActions): ViewHost {
       text: tl("Ask a question"),
       onclick: () => actions.setView("prompt"),
     }),
+    convertBtn,
     h("button", {
       class: "btn secondary",
       text: tl("Cancel"),
@@ -119,6 +134,7 @@ export function buildChoose(actions: ViewActions): ViewHost {
         h("b", { text: State.droppedFile?.name ?? t("file") }),
         document.createTextNode(t(" is ready.")),
       );
+      convertBtn.style.display = isConvertibleFileName(State.droppedFile?.name ?? "") ? "" : "none";
     },
   };
 }

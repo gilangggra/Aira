@@ -28,6 +28,7 @@ import { buildWhatsNew } from "./whatsnew";
 import { buildLaunch } from "./launch";
 import { buildAgendaView, buildReminderView } from "./agenda";
 import { buildClipboardView } from "./clipboard";
+import { buildConvertView } from "./convert";
 import { buildWeatherView } from "./weather";
 import { buildSpotifyCard, buildSpotifyPill, buildMusicView, togglePlay, type SpotifyPillHost } from "./spotify";
 import { SPOTIFY_ID, Spotify, currentArtwork, spotifyPosition } from "../core/spotify";
@@ -64,7 +65,7 @@ export interface ViewActions {
   toggleSound(): void;
   setVolume(v: number): void;
   setAutoClose(seconds: number): void;
-  openSettingsWindow(): void;
+  openSettingsWindow(page?: string): void;
   blip(): void;
   /** Wardrobe click: keeps the outfit ("auto" and "none" included). */
   chooseOutfit(selection: OutfitSelection): void;
@@ -82,6 +83,8 @@ export interface ViewActions {
   focusTask?(title: string, taskId?: string): void;
   /** Opens the AI chat view with clipboard text attached as context. */
   sendToChat?(text: string): void;
+  /** Opens a native file picker for local file conversion. */
+  pickConvertFile?(): void;
 }
 
 export interface ViewHost {
@@ -209,6 +212,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
   const dockNotes = dockTab(ICONS.calendar, tl("Notes"), () => go("agenda"), "tab-agenda");
   dockNotes.append(h("i", { class: "tab-dot" }));
   const dockMail = dockTab(ICONS.envelope, tl("Mail"), () => go("mail"));
+  const dockConvert = dockTab(ICONS.convert, tl("Convert"), () => go("convert"));
 
   const gearBtn = h(
     "button",
@@ -237,7 +241,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
   const dockEl = h(
     "div",
     { id: "dock" },
-    h("div", { class: "dock-tabs" }, dockPlus, dockHome, dockChat, dockMusic, dockWeather, dockLaunch, dockClips, dockNotes, dockMail),
+    h("div", { class: "dock-tabs" }, dockPlus, dockHome, dockChat, dockMusic, dockWeather, dockLaunch, dockClips, dockNotes, dockMail, dockConvert),
     h("div", { class: "dock-actions" }, soundBtn, gearBtn, closeBtn),
   );
 
@@ -275,6 +279,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
       dockClips.classList.toggle("on", v === "clipboard");
       dockNotes.classList.toggle("on", v === "agenda");
       dockMail.classList.toggle("on", v === "mail");
+      dockConvert.classList.toggle("on", v === "convert");
 
       const todayPending = pendingCountForDate(loadAgendaTasks(), dayKey(now));
       dockNotes.classList.toggle("has-pending", todayPending > 0);
@@ -1312,9 +1317,10 @@ export function buildViews(
   map.set("note", buildNote());
   map.set("settings", buildSettings(actions));
   map.set("prompt", buildPrompt(onChatHeightChange));
-  map.set("upload", buildUpload());
+  map.set("upload", buildUpload(actions));
   map.set("uploading", buildUploading());
   map.set("choose", buildChoose(actions));
+  map.set("convert", buildConvertView(actions));
   map.set("recap", buildRecap(actions));
   map.set("wardrobe", buildWardrobe(actions));
   map.set("update", buildUpdate());

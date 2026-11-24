@@ -674,8 +674,8 @@ pub fn flow_models_download(app: AppHandle, engine: Option<String>) {
 }
 
 #[tauri::command]
-pub fn flow_models_remove(app: AppHandle) {
-    speech::remove(&app);
+pub fn flow_models_remove(app: AppHandle, engine: Option<String>) {
+    speech::remove(&app, engine.as_deref());
 }
 
 // ── The pill's page ───────────────────────────────────────────────────────────

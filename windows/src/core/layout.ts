@@ -31,7 +31,8 @@ export type IslandViewName =
   | "reminder"
   | "weather"
   | "clipboard"
-  | "music";
+  | "music"
+  | "convert";
 
 export type BotStateName =
   | "idle"
@@ -118,6 +119,8 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   clipboard: { height: 306, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
   // Dedicated full-bleed artwork music stage + live synced lyric headline.
   music: { height: 306, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
+  // Local file converter (FFmpeg, LibreOffice headless, Pandoc).
+  convert: { height: 296, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
 };
 
 // The upload views above are only the fallback geometry. Once a file is actually

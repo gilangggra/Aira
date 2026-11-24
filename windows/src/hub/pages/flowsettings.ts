@@ -39,7 +39,7 @@ export function modelsControl(ctx: HubContext, onReady?: () => void): HTMLElemen
       el.append(
         button(t("Remove the models"), () => {
           confirming = false;
-          void FlowBridge.removeModels();
+          void FlowBridge.removeModels(engine);
         }, "danger", true),
         button(t("Cancel"), () => {
           confirming = false;
@@ -47,12 +47,12 @@ export function modelsControl(ctx: HubContext, onReady?: () => void): HTMLElemen
         }, "", true),
       );
     } else {
-      const ok = h("button", { class: "hub-link", style: "color:var(--hub-green)", text: `✓ ${t("Installed")}`, title: t("Remove the models") });
-      ok.addEventListener("click", () => {
+      const ok = h("span", { style: "color:var(--hub-green);font-size:12px;font-weight:500", text: `✓ ${t("Installed")}` });
+      const uninstall = button(t("Uninstall"), () => {
         confirming = true;
         draw(ctx.status.models);
-      });
-      el.append(ok);
+      }, "danger", true);
+      el.append(ok, uninstall);
     }
   };
   draw(ctx.status.models);
