@@ -40,9 +40,9 @@ On Windows and Linux, speech recognition runs 100% locally via statically linked
 
 ---
 
-## 2. macOS Architecture (`NotchBuddy/Sources/App/Voice/`)
+## 2. macOS Architecture (`macos/Sources/App/Voice/`)
 
-Plan de travail et architecture pour macOS (`NotchBuddy/`).
+Plan de travail et architecture pour macOS (`macos/`).
 Chaque phase = une PR, avec ses tests, et rien ne sort de ce qui est demandé dans la phase.
 
 ## L'idée
@@ -70,7 +70,7 @@ Mochi réagit (content, ou « je n'ai pas compris »), l'île se referme. Coucou
 
 ## Architecture
 
-Nouveau dossier `NotchBuddy/Sources/App/Voice/` :
+Nouveau dossier `macos/Sources/App/Voice/` :
 
 | Fichier | Rôle |
 |---|---|

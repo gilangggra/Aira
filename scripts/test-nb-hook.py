@@ -20,7 +20,7 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "NotchBuddy/Sources/App/HookServer.swift"
+SOURCE = ROOT / "macos/Sources/App/HookServer.swift"
 DEFAULT_SOCKETS = {
     "nbHookPythonGitHub": "Library/Application Support/NotchBuddy/nb.sock",
     "nbHookPythonAppStore": "Library/Containers/fr.louisraille.Coucou/Data/nb.sock",

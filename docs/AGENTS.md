@@ -283,7 +283,7 @@ With Aira running:
 
 ```sh
 echo '{"hook_event_name":"UserPromptSubmit","session_id":"t1","prompt":"hello","coucou_agent":"demo"}' \
-  | /bin/sh ~/Library/Application\ Support/NotchBuddy/nb-hook --agent demo
+  | /bin/sh ~/Library/Application\ Support/macos/nb-hook --agent demo
 ```
 
 A "demo" pill should appear in the island.

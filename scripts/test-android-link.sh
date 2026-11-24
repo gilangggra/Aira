@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/coucou-android-link.XXXXXX")"
 trap 'rm -rf "$TEST_DIR"' EXIT
-LINK=NotchBuddy/Sources/App/AndroidLink
+LINK=macos/Sources/App/AndroidLink
 swiftc -swift-version 6 -strict-concurrency=complete \
     $LINK/AndroidLinkProtocol.swift $LINK/AndroidLinkAdmission.swift $LINK/AndroidLinkHub.swift \
     $LINK/AndroidLinkIdentity.swift tests/AndroidLinkTests.swift -o "$TEST_DIR/android-link-tests"

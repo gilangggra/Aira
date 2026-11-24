@@ -5,7 +5,7 @@
 #   ./scripts/release.sh 0.1.2 --finish   finish after an interrupted notarization wait
 #
 # Run it from a clean checkout of main. CFBundleShortVersionString in
-# NotchBuddy/project.yml must match the version, and CHANGELOG.md needs a
+# macos/project.yml must match the version, and CHANGELOG.md needs a
 # "## <version>" section: it becomes the release notes.
 set -euo pipefail
 
@@ -45,7 +45,7 @@ CHANGES=$(awk -v head="## $VERSION" '
 grep -q "| \[$VERSION\]" README.md || die "README.md has no row for $VERSION in the Versions table"
 # Mochi shows it once in the notch after the update: an entry in every language.
 python3 scripts/test-whats-new.py mac >/dev/null \
-  || { python3 scripts/test-whats-new.py mac; die "NotchBuddy/Resources/whats-new.json needs a complete entry for $VERSION (CLAUDE.md, Releases)"; }
+  || { python3 scripts/test-whats-new.py mac; die "macos/Resources/whats-new.json needs a complete entry for $VERSION (CLAUDE.md, Releases)"; }
 
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
   die "tag $TAG already exists here"
@@ -89,10 +89,10 @@ if [ "$MODE" != "--finish" ]; then
   # ── 2. xcodegen + Release build ─────────────────────────────────────────────
   cd "$REPO_ROOT/NotchBuddy"
   PLIST_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist 2>/dev/null || true)
-  [ "$PLIST_VERSION" = "$VERSION" ] || die "NotchBuddy/Resources/Info.plist is version $PLIST_VERSION, not $VERSION: run xcodegen and commit Info.plist"
+  [ "$PLIST_VERSION" = "$VERSION" ] || die "macos/Resources/Info.plist is version $PLIST_VERSION, not $VERSION: run xcodegen and commit Info.plist"
   xcodegen generate
   PLIST_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
-  [ "$PLIST_VERSION" = "$VERSION" ] || die "project.yml says $PLIST_VERSION, not $VERSION: update CFBundleShortVersionString in NotchBuddy/project.yml"
+  [ "$PLIST_VERSION" = "$VERSION" ] || die "project.yml says $PLIST_VERSION, not $VERSION: update CFBundleShortVersionString in macos/project.yml"
 
   rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
   echo "$COMMIT" > "$COMMIT_FILE"

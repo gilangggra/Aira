@@ -76,16 +76,16 @@ def set_version(version: str) -> None:
     pkgbuild = ROOT / "linux/arch/PKGBUILD"
     replace_once(pkgbuild, r"(^pkgver=)[0-9.]+", rf"\g<1>{version}", flags=re.MULTILINE)
 
-    # 7. NotchBuddy/project.yml (first target: NotchBuddy GitHub build)
-    project_yml = ROOT / "NotchBuddy/project.yml"
+    # 7. macos/project.yml (first target: NotchBuddy GitHub build)
+    project_yml = ROOT / "macos/project.yml"
     replace_once(
         project_yml,
         r'(CFBundleShortVersionString:\s*")[0-9.]+(")',
         rf"\g<1>{version}\2",
     )
 
-    # 8. NotchBuddy/Resources/Info.plist
-    info_plist = ROOT / "NotchBuddy/Resources/Info.plist"
+    # 8. macos/Resources/Info.plist
+    info_plist = ROOT / "macos/Resources/Info.plist"
     replace_once(
         info_plist,
         r"(<key>CFBundleShortVersionString</key>\s*<string>)[0-9.]+(</string>)",
@@ -100,8 +100,8 @@ def set_version(version: str) -> None:
         rf"\g<1>{version}\2",
     )
 
-    # 10. NotchBuddy/Resources/whats-new.json
-    mac_whats_new = ROOT / "NotchBuddy/Resources/whats-new.json"
+    # 10. macos/Resources/whats-new.json
+    mac_whats_new = ROOT / "macos/Resources/whats-new.json"
     replace_once(
         mac_whats_new,
         r'("releases":\s*\[\s*\{\s*"version":\s*")[0-9.]+(")',
@@ -143,17 +143,17 @@ def read_versions() -> dict[str, str]:
     ).group(1)
     mac_proj = re.search(
         r'CFBundleShortVersionString:\s*"([0-9.]+)"',
-        (ROOT / "NotchBuddy/project.yml").read_text(encoding="utf-8"),
+        (ROOT / "macos/project.yml").read_text(encoding="utf-8"),
     ).group(1)
     mac_plist = re.search(
         r"<key>CFBundleShortVersionString</key>\s*<string>([0-9.]+)</string>",
-        (ROOT / "NotchBuddy/Resources/Info.plist").read_text(encoding="utf-8"),
+        (ROOT / "macos/Resources/Info.plist").read_text(encoding="utf-8"),
     ).group(1)
     win_whats_new = json.loads(
         (ROOT / "windows/src/whats-new/whats-new.json").read_text(encoding="utf-8")
     )["releases"][0]["version"]
     mac_whats_new = json.loads(
-        (ROOT / "NotchBuddy/Resources/whats-new.json").read_text(encoding="utf-8")
+        (ROOT / "macos/Resources/whats-new.json").read_text(encoding="utf-8")
     )["releases"][0]["version"]
     changelog_m = re.search(
         r"^## \[?(\d+\.\d+\.\d+)\]?",
@@ -171,10 +171,10 @@ def read_versions() -> dict[str, str]:
         "windows/Cargo.lock (app)": cargo_lock_main,
         "windows/Cargo.lock (hook)": cargo_lock_hook,
         "linux/arch/PKGBUILD": pkgbuild,
-        "NotchBuddy/project.yml": mac_proj,
-        "NotchBuddy/Resources/Info.plist": mac_plist,
+        "macos/project.yml": mac_proj,
+        "macos/Resources/Info.plist": mac_plist,
         "windows/src/whats-new/whats-new.json": win_whats_new,
-        "NotchBuddy/Resources/whats-new.json": mac_whats_new,
+        "macos/Resources/whats-new.json": mac_whats_new,
         "CHANGELOG.md": changelog,
     }
 

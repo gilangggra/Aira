@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def relay_source():
     """The full generated GitHub relay as runnable Python (Swift escapes undone)."""
-    source = (ROOT / 'NotchBuddy/Sources/App/HookServer.swift').read_text()
+    source = (ROOT / 'macos/Sources/App/HookServer.swift').read_text()
     body = source.split('private let nbHookPythonGitHub = """\n', 1)[1].split('\n"""', 1)[0]
     return body.replace('\\\\', '\\')
 

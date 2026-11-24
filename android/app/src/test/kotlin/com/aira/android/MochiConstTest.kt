@@ -43,6 +43,6 @@ class MochiConstTest {
         val ref = Regex("""(\w+): "(\w+)"""").findAll(block).associate { it.groupValues[1] to it.groupValues[2] }
         for ((state, sound) in MochiConst.STATE_SOUND) assertEquals(ref[state.key], sound)
         assertEquals(ref.size, MochiConst.STATE_SOUND.size)
-        for (sound in ref.values) assertNotNull(ReferenceFiles.file("NotchBuddy/Resources/sounds/$sound.wav").takeIf { it.exists() })
+        for (sound in ref.values) assertNotNull(ReferenceFiles.file("macos/Resources/sounds/$sound.wav").takeIf { it.exists() })
     }
 }

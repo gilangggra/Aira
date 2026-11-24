@@ -82,18 +82,18 @@ Still stuck? [Open an issue](https://github.com/gilangggra/Aira/issues) or see [
 
 ## Build it yourself (developers)
 
-The iPhone app is in this repository (`NotchBuddy/Sources/Phone`, with its widgets in `Sources/Widgets` and the notification card in `Sources/NotificationContent`). It shares Mochi, the pills and the diff engine with the Mac through `Sources/CoucouKit`.
+The iPhone app is in this repository (`macos/Sources/Phone`, with its widgets in `Sources/Widgets` and the notification card in `Sources/NotificationContent`). It shares Mochi, the pills and the diff engine with the Mac through `Sources/CoucouKit`.
 
 To run it from source on your own iPhone, the Mac app and the iPhone app have to share **your own** iCloud container, because a container belongs to the Apple developer team that signs the app:
 
 1. A paid [Apple Developer Program](https://developer.apple.com/programs/) membership: iCloud (CloudKit) and push notifications aren't available with a free account.
-2. In `NotchBuddy/project.yml`, set `bundleIdPrefix` and every `DEVELOPMENT_TEAM` to yours.
-3. Replace `iCloud.fr.louisraille.Coucou` with your own container (for example `iCloud.com.you.Coucou`) everywhere it appears: the `.entitlements` files in `NotchBuddy/Resources` and the Swift files under `Sources/App/PhoneLink` and `Sources/Phone` (`grep -rn "iCloud.fr.louisraille.Coucou" NotchBuddy`).
+2. In `macos/project.yml`, set `bundleIdPrefix` and every `DEVELOPMENT_TEAM` to yours.
+3. Replace `iCloud.fr.louisraille.Coucou` with your own container (for example `iCloud.com.you.Coucou`) everywhere it appears: the `.entitlements` files in `macos/Resources` and the Swift files under `Sources/App/PhoneLink` and `Sources/Phone` (`grep -rn "iCloud.fr.louisraille.Coucou" NotchBuddy`).
 4. Create the container in the [CloudKit console](https://icloud.developer.apple.com/) and run both apps once in Debug: the record types are created in the Development environment.
 5. For the Live Activity, deploy your own relay with your APNs key ([`relay/README.md`](../relay/README.md)), set `APNS_TOPIC` in `relay/wrangler.toml` to your iPhone app's bundle ID followed by `.push-type.liveactivity`, and put your relay's address in `LiveActivityRelay.defaultRelayURL`.
 6. Build:
    ```bash
-   cd NotchBuddy
+   cd macos
    xcodegen
    open NotchBuddy.xcodeproj   # scheme NotchBuddy for the Mac, CoucouPhone for the iPhone
    ```

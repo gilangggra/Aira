@@ -5,7 +5,7 @@ import Security
 // Checks the Mac side of the Android link against the vectors of the Windows/Linux server
 // (windows/src-tauri/src/phone_link/: pairing.rs, discovery.rs, admission.rs, hub.rs, server.rs) and
 // the Android client (ProtocolTest.kt): the bytes the Mac produces must be the bytes the phone expects.
-// Compiled by scripts/test-android-link.sh with the pure files of NotchBuddy/Sources/App/AndroidLink/.
+// Compiled by scripts/test-android-link.sh with the pure files of macos/Sources/App/AndroidLink/.
 
 nonisolated(unsafe) var failures = 0
 func check(_ condition: @autoclosure () -> Bool, _ what: String, line: Int = #line) {

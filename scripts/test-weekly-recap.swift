@@ -39,7 +39,7 @@ struct RecapData: Codable {
 // MARK: - Target path
 
 let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-let recapURL = support.appendingPathComponent("NotchBuddy/recap.json")
+let recapURL = support.appendingPathComponent("macos/recap.json")
 
 // Load existing data (if any) so we don't clobber other weeks.
 var data: RecapData

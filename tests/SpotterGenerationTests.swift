@@ -4,7 +4,7 @@ import Foundation
 //
 // Pure test — no AppKit, no AVFoundation. Compiles with:
 //   swiftc -o /tmp/spotter-gen-tests \
-//     NotchBuddy/Sources/App/Voice/SpotterGeneration.swift \
+//     macos/Sources/App/Voice/SpotterGeneration.swift \
 //     tests/SpotterGenerationTests.swift
 
 @main

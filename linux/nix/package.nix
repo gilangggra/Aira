@@ -83,7 +83,7 @@ let
           ]
         )
       ))
-      ../../NotchBuddy/Resources/sounds
+      ../../macos/Resources/sounds
     ];
   };
 in

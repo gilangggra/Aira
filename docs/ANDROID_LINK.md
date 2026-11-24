@@ -6,7 +6,7 @@ the local network.
 
 Status: the Android client, `android/tools/dev-desktop.mjs` (a stand-in desktop for testing), the
 real desktop server of the Windows/Linux app (`windows/src-tauri/src/phone_link/`) and the Mac app
-(`NotchBuddy/Sources/App/AndroidLink/`) implement this.
+(`macos/Sources/App/AndroidLink/`) implement this.
 
 ## Transport
 
@@ -355,7 +355,7 @@ simply keeps using the saved address.**
 ## Mac implementation notes
 
 The Mac app speaks the same protocol v1 as the Windows/Linux one, in Swift with Network.framework, CryptoKit and Security only
-(`NotchBuddy/Sources/App/AndroidLink/`). The phone cannot tell a Mac from a PC (`welcome.os` is `macos`).
+(`macos/Sources/App/AndroidLink/`). The phone cannot tell a Mac from a PC (`welcome.os` is `macos`).
 
 - **Settings → Android phone**: off by default (`androidLinkEnabled`). Turning it on starts a TLS listener and a Bonjour announcement;
   turning it off, or quitting, stops both. While it is off nothing listens and no timer runs; while it is on the work is event driven

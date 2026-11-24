@@ -6,7 +6,7 @@ Thanks for wanting to help Mochi and Aira grow! 🫶
 
 ```bash
 brew install xcodegen
-cd NotchBuddy && xcodegen && open NotchBuddy.xcodeproj
+cd macos && xcodegen && open NotchBuddy.xcodeproj
 ```
 
 Never edit `NotchBuddy.xcodeproj` by hand: change `project.yml` and run `xcodegen`.

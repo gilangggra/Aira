@@ -3,7 +3,7 @@
 
 Coucou shows, once after it updated itself, what the new version brings (an icon, a title and a
 line per item, in every language the app speaks). The entries live in
-  NotchBuddy/Resources/whats-new.json   (Mac, the 16 languages of Localizable.xcstrings)
+  macos/Resources/whats-new.json   (Mac, the 16 languages of Localizable.xcstrings)
   windows/src/whats-new/whats-new.json  (Windows and Linux, the languages of strings.json)
 This test fails when the version the app is about to ship has no entry, or an entry is
 incomplete. release.sh runs it too, so a release can't go out without its "What's new".
@@ -38,7 +38,7 @@ def fail(msg):
 
 
 def mac_version():
-    text = (ROOT / "NotchBuddy/project.yml").read_text(encoding="utf-8")
+    text = (ROOT / "macos/project.yml").read_text(encoding="utf-8")
     # The first target is the GitHub app (NotchBuddy); the App Store build has its own numbers.
     m = re.search(r'CFBundleShortVersionString:\s*"([0-9.]+)"', text)
     return m.group(1)
@@ -49,11 +49,11 @@ def windows_version():
 
 
 def check_mac_manifests(version):
-    plist_text = (ROOT / "NotchBuddy/Resources/Info.plist").read_text(encoding="utf-8")
+    plist_text = (ROOT / "macos/Resources/Info.plist").read_text(encoding="utf-8")
     m = re.search(r"<key>CFBundleShortVersionString</key>\s*<string>([0-9.]+)</string>", plist_text)
     plist_v = m.group(1) if m else ""
     if plist_v != version:
-        fail(f"NotchBuddy/Resources/Info.plist says {plist_v!r}, expected {version!r}")
+        fail(f"macos/Resources/Info.plist says {plist_v!r}, expected {version!r}")
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if not re.search(rf"^## \[?{re.escape(version)}\]?", changelog_text, re.MULTILINE):
         fail(f"CHANGELOG.md has no section for {version}")
@@ -165,7 +165,7 @@ def main():
     if only in (None, "mac"):
         mv = mac_version()
         check_mac_manifests(mv)
-        check("Mac", ROOT / "NotchBuddy/Resources/whats-new.json", mv, MAC_LANGS)
+        check("Mac", ROOT / "macos/Resources/whats-new.json", mv, MAC_LANGS)
     if only in (None, "windows"):
         wv = windows_version()
         check_windows_manifests(wv)

@@ -84,6 +84,6 @@ echo
 echo "To test:"
 echo "  1. Quit any other Coucou (menu bar icon → Quit) and stop it in Xcode."
 echo "  2. open $APP"
-echo "  3. tail -f ~/Library/Logs/NotchBuddy/nb.log | grep PhoneLink"
+echo "  3. tail -f ~/Library/Logs/macos/nb.log | grep PhoneLink"
 echo "  4. Developer ID builds use the Production CloudKit environment: run the iPhone"
 echo "     app with the CoucouPhoneProduction scheme, pull to refresh, then tap Send pong."

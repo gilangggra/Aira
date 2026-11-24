@@ -58,7 +58,7 @@ enum WhatsNewTests {
 
         print("\nThe app's own file")
         let path = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("NotchBuddy/Resources/whats-new.json")
+            .appendingPathComponent("macos/Resources/whats-new.json")
         if let data = try? Data(contentsOf: path) {
             let own = WhatsNew.releases(data)
             check("whats-new.json reads", !own.isEmpty)

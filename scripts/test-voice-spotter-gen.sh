@@ -6,6 +6,6 @@ OUT=/tmp/spotter-gen-tests
 
 echo "=== SpotterGeneration tests ==="
 swiftc -o "$OUT" \
-    "$ROOT/NotchBuddy/Sources/App/Voice/SpotterGeneration.swift" \
+    "$ROOT/macos/Sources/App/Voice/SpotterGeneration.swift" \
     "$ROOT/tests/SpotterGenerationTests.swift"
 "$OUT"

@@ -6,11 +6,11 @@ echo "=== ConversationContext tests ==="
 swiftc -swift-version 6 -strict-concurrency=complete \
     "$ROOT/tests/VoiceTestStubs.swift" \
     "$ROOT/tests/PillFixture.swift" \
-    "$ROOT/NotchBuddy/Sources/App/Voice/VoiceIntent.swift" \
-    "$ROOT/NotchBuddy/Sources/App/Voice/IntentParser.swift" \
-    "$ROOT/NotchBuddy/Sources/App/Voice/VoiceQuery.swift" \
-    "$ROOT/NotchBuddy/Sources/App/Voice/EntityResolver.swift" \
-    "$ROOT/NotchBuddy/Sources/App/Voice/ConversationContext.swift" \
+    "$ROOT/macos/Sources/App/Voice/VoiceIntent.swift" \
+    "$ROOT/macos/Sources/App/Voice/IntentParser.swift" \
+    "$ROOT/macos/Sources/App/Voice/VoiceQuery.swift" \
+    "$ROOT/macos/Sources/App/Voice/EntityResolver.swift" \
+    "$ROOT/macos/Sources/App/Voice/ConversationContext.swift" \
     "$ROOT/tests/ConversationContextTests.swift" \
     -o "$OUT"
 "$OUT"

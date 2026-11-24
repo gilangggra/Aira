@@ -18,7 +18,7 @@ jobs:
           path: |
             ~/Library/Caches/org.swift.swiftpm
             ~/Library/org.swift.swiftpm
-          key: ${{ runner.os }}-spm-${{ hashFiles('NotchBuddy/project.yml') }}
+          key: ${{ runner.os }}-spm-${{ hashFiles('macos/project.yml') }}
           restore-keys: |
             ${{ runner.os }}-spm-
 
@@ -26,13 +26,13 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate project
-        run: cd NotchBuddy && xcodegen
+        run: cd macos && xcodegen
 
       - name: Resolve Swift package dependencies
         run: |
           for i in 1 2 3 4 5; do
             echo "Attempt $i: Resolving Swift package dependencies..."
-            if xcodebuild -resolvePackageDependencies -project NotchBuddy/NotchBuddy.xcodeproj -scheme NotchBuddy; then
+            if xcodebuild -resolvePackageDependencies -project macos/NotchBuddy.xcodeproj -scheme NotchBuddy; then
               echo "Package dependencies resolved successfully."
               break
             fi
@@ -221,7 +221,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild \
-            -project NotchBuddy/NotchBuddy.xcodeproj \
+            -project macos/NotchBuddy.xcodeproj \
             -scheme NotchBuddy \
             -configuration Release \
             build \
@@ -235,7 +235,7 @@ jobs:
       - name: Build App Store target (unsigned)
         run: |
           xcodebuild \
-            -project NotchBuddy/NotchBuddy.xcodeproj \
+            -project macos/NotchBuddy.xcodeproj \
             -scheme AiraAppStore \
             -configuration Debug \
             build \
@@ -245,7 +245,7 @@ jobs:
       - name: Build iPhone link spike (Mac, DebugCloud, unsigned)
         run: |
           xcodebuild \
-            -project NotchBuddy/NotchBuddy.xcodeproj \
+            -project macos/NotchBuddy.xcodeproj \
             -scheme NotchBuddyCloud \
             -configuration DebugCloud \
             build \
@@ -255,7 +255,7 @@ jobs:
       - name: Build iPhone link spike (Mac, ReleaseCloud, unsigned)
         run: |
           xcodebuild \
-            -project NotchBuddy/NotchBuddy.xcodeproj \
+            -project macos/NotchBuddy.xcodeproj \
             -scheme NotchBuddy \
             -configuration ReleaseCloud \
             build \
@@ -265,7 +265,7 @@ jobs:
       - name: Build iPhone app (unsigned)
         run: |
           xcodebuild \
-            -project NotchBuddy/NotchBuddy.xcodeproj \
+            -project macos/NotchBuddy.xcodeproj \
             -scheme AiraPhone \
             -destination 'generic/platform=iOS' \
             build \
