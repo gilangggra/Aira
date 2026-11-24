@@ -615,10 +615,8 @@ export function buildMusicView(): SpotifyCardHost {
   artWrap.addEventListener("click", () => void Bridge.spotifyOpen());
   artWrap.title = t("Open Spotify");
 
-  const contextDot = dot("#1ed760", 6);
-  const contextBrand = h("span", { class: "music-tag", text: "SPOTIFY" });
   const contextAlbum = h("span", { class: "music-album-tag" });
-  const contextRow = h("div", { class: "music-context-row" }, contextDot, contextBrand, contextAlbum);
+  const contextRow = h("div", { class: "music-context-row" }, contextAlbum);
 
   const title = h("div", { class: "music-title" });
   title.addEventListener("click", () => void Bridge.spotifyOpen());
@@ -820,7 +818,9 @@ export function buildMusicView(): SpotifyCardHost {
     const s = Spotify.state;
     if (shownTrack !== track) {
       shownTrack = track;
-      contextAlbum.textContent = track.album || track.artist || "";
+      const albumText = track.album || "";
+      contextAlbum.textContent = albumText;
+      contextRow.style.display = albumText ? "" : "none";
       const displayTitle = isAd(track) ? t("Advertisement") : track.title;
       const displayArtist = isAd(track) ? "Spotify" : track.artist;
       title.textContent = displayTitle;

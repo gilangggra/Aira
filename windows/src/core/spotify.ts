@@ -119,3 +119,74 @@ export function islandDances(o: {
 export function desktopDances(music: boolean, state: BotStateName): boolean {
   return music && DANCE_STATES.has(state);
 }
+
+export interface ArtworkColors {
+  primary: [number, number, number];
+  secondary: [number, number, number];
+}
+
+/**
+ * Extracts a dominant and secondary RGB pair from an RGBA pixel buffer (e.g. a
+ * 16x16 downsampled album cover), favoring rich midtones over near-black/white.
+ */
+export function extractArtworkPalette(rgba: Uint8ClampedArray): ArtworkColors | null {
+  let sumR = 0;
+  let sumG = 0;
+  let sumB = 0;
+  let totalW = 0;
+  let bestSat = -1;
+  let bestRgb: [number, number, number] | null = null;
+  let secondSat = -1;
+  let secondRgb: [number, number, number] | null = null;
+
+  for (let i = 0; i + 3 < rgba.length; i += 4) {
+    if (rgba[i + 3] < 128) continue;
+    const r = rgba[i];
+    const g = rgba[i + 1];
+    const b = rgba[i + 2];
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const lum = (max + min) / 2;
+    const sat = max === 0 ? 0 : (max - min) / max;
+
+    const midWeight = 1 - Math.abs(lum - 128) / 140;
+    const w = Math.max(0.1, midWeight * (0.4 + sat * 1.4));
+    sumR += r * w;
+    sumG += g * w;
+    sumB += b * w;
+    totalW += w;
+
+    if (lum > 35 && lum < 235) {
+      const score = sat * (0.5 + midWeight);
+      if (score > bestSat) {
+        if (
+          bestRgb &&
+          bestSat > secondSat &&
+          Math.abs(r - bestRgb[0]) + Math.abs(g - bestRgb[1]) + Math.abs(b - bestRgb[2]) > 90
+        ) {
+          secondSat = bestSat;
+          secondRgb = bestRgb;
+        }
+        bestSat = score;
+        bestRgb = [r, g, b];
+      } else if (
+        bestRgb &&
+        score > secondSat &&
+        Math.abs(r - bestRgb[0]) + Math.abs(g - bestRgb[1]) + Math.abs(b - bestRgb[2]) > 90
+      ) {
+        secondSat = score;
+        secondRgb = [r, g, b];
+      }
+    }
+  }
+
+  if (totalW === 0) return null;
+  const avg: [number, number, number] = [
+    Math.round(sumR / totalW),
+    Math.round(sumG / totalW),
+    Math.round(sumB / totalW),
+  ];
+  const primary = bestRgb && bestSat > 0.2 ? bestRgb : avg;
+  const secondary = secondRgb ?? avg;
+  return { primary, secondary };
+}

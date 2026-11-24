@@ -367,6 +367,30 @@ pub fn pick_folder(_app: &AppHandle, start: Option<&str>, title: &str) -> Option
     None
 }
 
+/// Native desktop file picker via zenity or kdialog.
+pub fn pick_file(_app: &AppHandle, title: &str) -> Option<String> {
+    let start = home_dir().to_string_lossy().to_string();
+    let pickers: [(&str, Vec<String>); 2] = [
+        (
+            "zenity",
+            vec!["--file-selection".into(), format!("--title={title}"), format!("--filename={start}/")],
+        ),
+        ("kdialog", vec!["--title".into(), title.into(), "--getopenfilename".into(), start]),
+    ];
+    for (name, args) in pickers {
+        let Some(program) = find_on_path(name) else { continue };
+        let mut cmd = Command::new(program);
+        cmd.args(&args);
+        let out = no_console(&mut cmd).output().ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let path = String::from_utf8_lossy(&out.stdout).trim_end_matches(['\n', '\r']).to_string();
+        return (!path.is_empty()).then_some(path);
+    }
+    None
+}
+
 /// Our own `which`: the first executable file named `stem` on $PATH.
 pub fn find_on_path(stem: &str) -> Option<PathBuf> {
     let dirs = std::env::var_os("PATH")?;

@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { emit, sent } from "./tauri.mjs";
 import { installFakeDom } from "./fakedom.mjs";
 import {
-  IDLE_SPOTIFY, SPOTIFY_ID, Spotify, currentArtwork, desktopDances, formatTime, isAd, islandDances,
+  IDLE_SPOTIFY, SPOTIFY_ID, Spotify, currentArtwork, desktopDances, extractArtworkPalette, formatTime, isAd, islandDances,
   musicPlaying, spotifyPosition, volumeLevel, withPlaying,
 } from "../src/core/spotify.ts";
 import { BotEngine, danceTransform, stepDanceLevel } from "../src/mochi/engine.ts";
@@ -301,4 +301,18 @@ test("the pill shows play/pause and next on hover, only with a track", () => {
   assert.equal(Spotify.state.playing, false);
   pill.el.fire("mouseleave");
   assert.ok(!pill.el.classList.contains("controls"));
+});
+
+test("extractArtworkPalette picks dominant and contrasting accent colors", () => {
+  const rgba = new Uint8ClampedArray([
+    105, 195, 235, 255, // sky blue
+    105, 195, 235, 255,
+    240, 105, 165, 255, // pink frame
+    255, 255, 255, 255,
+  ]);
+  const palette = extractArtworkPalette(rgba);
+  assert.ok(palette);
+  assert.deepEqual(palette.primary, [240, 105, 165]);
+  assert.deepEqual(palette.secondary, [105, 195, 235]);
+  assert.equal(extractArtworkPalette(new Uint8ClampedArray([0, 0, 0, 0])), null);
 });

@@ -11,6 +11,8 @@ mod cli_relay;
 mod clipboard;
 mod codex_plan;
 mod config_file;
+mod converter;
+mod converter_install;
 mod desktop;
 mod files;
 mod flow;
@@ -968,6 +970,14 @@ pub fn run() {
             launch::launch_session,
             launch::pick_folder,
             launch::drop_into_session,
+            converter::converter_tools,
+            converter::converter_inspect,
+            converter::converter_convert,
+            converter::converter_pick_file,
+            converter::converter_reveal_output,
+            converter_install::converter_install_tool,
+            converter_install::converter_uninstall_tool,
+            converter_install::converter_install_status,
             open_claude_desktop,
             open_file_in_vscode,
             quit_app,
@@ -1086,6 +1096,7 @@ pub fn run() {
             whatsapp::whatsapp_save_gateway,
             whatsapp::whatsapp_test,
             whatsapp::whatsapp_install,
+            whatsapp::whatsapp_uninstall,
             flow::flow_status,
             flow::flow_set_prefs,
             flow::flow_history,

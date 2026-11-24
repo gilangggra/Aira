@@ -228,7 +228,7 @@ export const FlowBridge = {
   copy: (text: string) => call<boolean>("flow_copy", { text }),
   pasteAgain: () => call<void>("flow_paste_again"),
   download: (engine?: string) => call<void>("flow_models_download", { engine }),
-  removeModels: () => call<void>("flow_models_remove"),
+  removeModels: (engine?: string) => call<void>("flow_models_remove", { engine: engine ?? null }),
 
   notes: () => call<NotesState>("notes_state"),
   startNote: () => callOrThrow<string>("notes_start"),

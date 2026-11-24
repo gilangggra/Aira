@@ -1242,6 +1242,40 @@ pub fn whatsapp_install(window: WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+/// Stops GOWA, deletes its working directory (binary + WhatsApp session database),
+/// clears stored WhatsApp credentials, and resets WhatsApp preferences.
+pub fn uninstall() {
+    process::stop_now();
+    let dir = process::working_dir();
+    if dir.exists() {
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    for key in [URL_KEY, CREDENTIAL_KEY, SECRET_KEY] {
+        let _ = crate::secrets::set_internal(key, "");
+    }
+    {
+        let mut c = ctl();
+        c.prefs.enabled = false;
+        c.prefs.auto_start = false;
+        c.prefs.gowa_path.clear();
+        c.prefs.gowa_version = None;
+        prefs::save(&c.prefs);
+        c.url.clear();
+        c.has_credential = false;
+        c.install = Step::Idle;
+    }
+    crate::log::line("whatsapp: GOWA uninstalled and local folder removed");
+    settings_changed();
+}
+
+/// "Uninstall": removes GOWA binary, session data, and resets WhatsApp settings.
+#[tauri::command]
+pub fn whatsapp_uninstall(window: WebviewWindow) -> Result<(), String> {
+    only(&window, crate::HUB_LABEL)?;
+    uninstall();
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

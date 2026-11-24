@@ -12,6 +12,7 @@ import type { SpotifyState } from "./spotify";
 import type { UpdateStatus } from "./update";
 import type { WeatherLocation, WeatherSnapshot } from "./weather";
 import type { WaIslandView, WaSettingsView, WaTestResult } from "./whatsapp";
+import type { ConvertInspect, ConvertResult, ConverterToolInfo, ToolInstallStep } from "./converter";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -290,7 +291,7 @@ export const Bridge = {
 
   quit: () => call<void>("quit_app"),
 
-  openSettingsWindow: () => call<void>("open_settings_window"),
+  openSettingsWindow: (page?: string) => call<void>("open_settings_window", { page: page ?? null }),
 
   /** Writes to %LOCALAPPDATA%\Nala\nala.log, next to the Rust lines. */
   log: (message: string) => call<void>("log_line", { message }),
@@ -417,6 +418,17 @@ export const Bridge = {
     callOrThrow<LocalServer>("local_connect", { provider, url }),
   /** Copies a dropped file into the inbox. */
   ingestFile: (path: string) => callOrThrow<DroppedFile>("ingest_file", { path }),
+  /** Inspects a dropped/picked file for available local FFmpeg/LibreOffice/Pandoc targets. */
+  converterTools: () => call<ConverterToolInfo[]>("converter_tools"),
+  converterInspect: (path: string, fallbackPath?: string | null) =>
+    callOrThrow<ConvertInspect>("converter_inspect", { path, fallbackPath: fallbackPath ?? null }),
+  converterConvert: (path: string, fallbackPath: string | null | undefined, target: string) =>
+    callOrThrow<ConvertResult>("converter_convert", { path, fallbackPath: fallbackPath ?? null, target }),
+  converterPickFile: () => call<string | null>("converter_pick_file"),
+  converterRevealOutput: (path: string) => callOrThrow<void>("converter_reveal_output", { path }),
+  converterInstallStatus: () => call<ToolInstallStep>("converter_install_status"),
+  converterInstallTool: (tool: string) => callOrThrow<void>("converter_install_tool", { tool }),
+  converterUninstallTool: (tool: string) => callOrThrow<void>("converter_uninstall_tool", { tool }),
   /** Only ever tells you whether a key exists — never its value. */
   secretPresent: (key: string) => call<boolean>("secret_present", { key }),
   /** Whether Claude can answer: the API key, or else the user's own Claude Code. */
@@ -520,6 +532,7 @@ export const Bridge = {
   whatsappTest: () => call<WaTestResult>("whatsapp_test"),
   /** "Install WhatsApp" / "Update": GOWA from its GitHub releases, on this click only. */
   whatsappInstall: () => call<void>("whatsapp_install"),
+  whatsappUninstall: () => callOrThrow<void>("whatsapp_uninstall"),
 
   // ── New versions (src-tauri/src/update.rs) ────────────────────────────────
   updateStatus: () => call<UpdateStatus>("update_status"),

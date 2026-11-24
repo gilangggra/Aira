@@ -200,6 +200,11 @@ export function whatsappSection(host: WhatsAppSettingsHost): HTMLElement {
     }
     if (v.installed) {
       const update = h("button", { text: t("Update"), onclick: () => void Bridge.whatsappInstall() });
+      const uninstall = h("button", {
+        class: "danger",
+        text: t("Uninstall"),
+        onclick: () => void Bridge.whatsappUninstall(),
+      });
       const text = v.prefs.gowaVersion
         ? t("Gateway GOWA {version} installed, started by Aira", { version: v.prefs.gowaVersion })
         : t("Your GOWA gateway is set up");
@@ -208,6 +213,7 @@ export function whatsappSection(host: WhatsAppSettingsHost): HTMLElement {
         h("span", { style: "font-size:12.5px", text }),
         h("span", { class: "spacer" }),
         update,
+        uninstall,
       ));
     } else {
       out.push(

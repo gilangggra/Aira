@@ -266,6 +266,8 @@ class AppState {
 
   promptContext: PromptContext | null = null;
   droppedFile: { name: string; path: string } | null = null;
+  /** Original OS path from drag-drop or file picker, used to save converted files beside it. */
+  droppedOriginalPath: string | null = null;
   noteMessage: string | null = null;
   activeReminder: { id: string; date: string; title: string; time?: string } | null = null;
   searchResult: SearchResult | null = null;

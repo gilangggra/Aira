@@ -106,6 +106,61 @@ body {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
 }
 
+/* ── Time-of-Day Dynamic Gradients (Pagi, Siang, Sore, Senja, Malam, Fajar) ─ */
+
+#island[data-phase="dawn"] {
+  --phase-grad-1: rgba(96, 78, 158, 0.38);
+  --phase-grad-2: rgba(198, 114, 104, 0.28);
+}
+
+#island[data-phase="morning"] {
+  --phase-grad-1: rgba(56, 152, 224, 0.34);
+  --phase-grad-2: rgba(45, 190, 175, 0.22);
+}
+
+#island[data-phase="day"] {
+  --phase-grad-1: rgba(38, 122, 214, 0.34);
+  --phase-grad-2: rgba(64, 164, 232, 0.22);
+}
+
+#island[data-phase="afternoon"] {
+  --phase-grad-1: rgba(214, 142, 62, 0.30);
+  --phase-grad-2: rgba(164, 96, 86, 0.24);
+}
+
+#island[data-phase="dusk"] {
+  --phase-grad-1: rgba(124, 68, 148, 0.36);
+  --phase-grad-2: rgba(192, 86, 108, 0.26);
+}
+
+#island[data-phase="night"] {
+  --phase-grad-1: rgba(36, 54, 112, 0.38);
+  --phase-grad-2: rgba(22, 34, 72, 0.28);
+}
+
+#island[data-style="glass"][data-phase]:not([data-music="on"]):not([data-weather="on"]) {
+  --island-bg:
+    radial-gradient(ellipse 82% 90% at 16% 14%, var(--phase-grad-1, transparent) 0%, transparent 68%),
+    radial-gradient(ellipse 80% 85% at 86% 84%, var(--phase-grad-2, transparent) 0%, transparent 70%),
+    linear-gradient(180deg, rgba(22, 25, 32, 0.90) 0%, rgba(12, 14, 18, 0.95) 100%);
+  --island-ear: rgba(22, 25, 32, 0.90);
+}
+
+#island[data-style="translucent"][data-phase]:not([data-music="on"]):not([data-weather="on"]) {
+  --island-bg:
+    radial-gradient(ellipse 82% 90% at 16% 14%, var(--phase-grad-1, transparent) 0%, transparent 68%),
+    radial-gradient(ellipse 80% 85% at 86% 84%, var(--phase-grad-2, transparent) 0%, transparent 70%),
+    rgba(16, 18, 24, 0.78);
+  --island-ear: rgba(16, 18, 24, 0.78);
+}
+
+#island[data-style="solid"][data-phase]:not([data-music="on"]):not([data-weather="on"]):not([data-bar="on"]) {
+  --island-bg:
+    radial-gradient(ellipse 82% 90% at 16% 14%, color-mix(in srgb, var(--phase-grad-1, transparent) 45%, transparent) 0%, transparent 68%),
+    radial-gradient(ellipse 80% 85% at 86% 84%, color-mix(in srgb, var(--phase-grad-2, transparent) 45%, transparent) 0%, transparent 70%),
+    #000000;
+}
+
 #island[data-shape="island"] {
   border-top: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
@@ -4521,11 +4576,13 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.085);
   flex: 0 0 auto;
+  outline: none;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .agenda-form:focus-within {
-  border-color: rgba(255, 255, 255, 0.2);
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.055);
 }
 
@@ -4566,6 +4623,7 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   border-radius: 6px;
   cursor: pointer;
   flex: 0 0 auto;
+  outline: none;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
@@ -4573,6 +4631,11 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   background: rgba(255, 255, 255, 0.16);
   border-color: rgba(255, 255, 255, 0.28);
   color: #fff;
+}
+
+.agenda-add-btn:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
 /* ── Compact Island & Header Agenda Indicators ──────────────────────────────── */
@@ -5478,9 +5541,9 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 .agenda-time-pill.on {
-  background: rgba(56, 189, 248, 0.18);
-  border-color: rgba(56, 189, 248, 0.42);
-  color: #7dd3fc;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
 }
 
 .agenda-time-clear {
@@ -5536,17 +5599,17 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 .agenda-time-chip {
   height: 22px;
   padding: 0 7px;
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 5px;
-  background: rgba(56, 189, 248, 0.12);
-  color: #7dd3fc;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
   font: 600 10px var(--font);
   cursor: pointer;
   flex: 0 0 auto;
 }
 
 .agenda-time-chip:hover {
-  background: rgba(56, 189, 248, 0.26);
+  background: rgba(255, 255, 255, 0.16);
   color: #fff;
 }
 
@@ -5589,8 +5652,8 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 .agenda-time-preset.on {
-  background: rgba(56, 189, 248, 0.22);
-  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.35);
   color: #fff;
 }
 
@@ -6480,15 +6543,15 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 .agenda-day.today {
-  color: #38bdf8;
-  font-weight: 600;
+  color: #ffffff;
+  font-weight: 700;
 }
 
 .agenda-day.selected {
-  background: rgba(56, 189, 248, 0.24);
+  background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
 .agenda-day-title {
@@ -6521,8 +6584,9 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 .agenda-check.on {
-  background: #38bdf8;
-  border-color: #38bdf8;
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #ffffff;
 }
 
 .agenda-form {
@@ -6610,6 +6674,14 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 
 .weather-backdrop.on {
   opacity: 1;
+}
+
+#island[data-style="translucent"] .weather-backdrop.on {
+  opacity: 0.78;
+}
+
+#island[data-style="solid"] .weather-backdrop.on {
+  opacity: 0.56;
 }
 
 /* Real-Time Phase Sky Gradients (Dawn, Morning, Day, Afternoon/Sore, Dusk/Senja, Night/Malam) */
@@ -6966,6 +7038,37 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 
 #island[data-style="glass"] .card.wash::after {
   opacity: 0.9;
+}
+
+#island[data-style="translucent"] .card,
+#island[data-style="translucent"] .dash-card,
+#island[data-style="translucent"] .agenda-cal,
+#island[data-style="translucent"] .agenda-tasks {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+#island[data-style="translucent"] .card.wash::after {
+  opacity: 0.72;
+}
+
+#island[data-style="solid"] .card,
+#island[data-style="solid"] .dash-card,
+#island[data-style="solid"] .agenda-cal,
+#island[data-style="solid"] .agenda-tasks {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.085);
+  box-shadow: none;
+}
+
+#island[data-style="solid"] .dash-card:hover {
+  background: rgba(255, 255, 255, 0.085);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+#island[data-style="solid"] .card.wash::after {
+  opacity: 0.52;
 }
 
 /* ── Top Status Bar (Left: date/temp · Center: Mochi · Right: time/plan) ─ */
@@ -8030,8 +8133,27 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 #island[data-music="on"] {
-  --island-bg: linear-gradient(180deg, rgba(20, 24, 28, 0.94) 0%, rgba(12, 14, 18, 0.98) 100%);
-  --island-ear: rgba(20, 24, 28, 0.94);
+  --island-bg:
+    radial-gradient(ellipse 85% 90% at 20% 25%, var(--music-grad-1, rgba(28, 34, 42, 0.55)) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 85% at 85% 75%, var(--music-grad-2, rgba(18, 22, 28, 0.4)) 0%, transparent 72%),
+    linear-gradient(180deg, rgba(16, 18, 22, 0.90) 0%, rgba(10, 12, 16, 0.95) 100%);
+  --island-ear: var(--music-ear, rgba(16, 18, 22, 0.92));
+}
+
+#island[data-style="translucent"][data-music="on"] {
+  --island-bg:
+    radial-gradient(ellipse 85% 90% at 20% 25%, color-mix(in srgb, var(--music-grad-1, rgba(28, 34, 42, 0.4)) 78%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 85% at 85% 75%, color-mix(in srgb, var(--music-grad-2, rgba(18, 22, 28, 0.3)) 78%, transparent) 0%, transparent 72%),
+    rgba(14, 16, 22, 0.72);
+  --island-ear: rgba(14, 16, 22, 0.76);
+}
+
+#island[data-style="solid"][data-music="on"] {
+  --island-bg:
+    radial-gradient(ellipse 85% 90% at 20% 25%, color-mix(in srgb, var(--music-grad-1, transparent) 45%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 85% at 85% 75%, color-mix(in srgb, var(--music-grad-2, transparent) 45%, transparent) 0%, transparent 72%),
+    #000000;
+  --island-ear: #000000;
 }
 
 .music-backdrop {
@@ -8055,13 +8177,21 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   height: calc(100% + 80px);
   object-fit: cover;
   object-position: center;
-  filter: blur(72px) saturate(140%);
+  filter: blur(56px) saturate(165%);
   opacity: 0;
   transition: opacity 0.5s ease;
 }
 
 .music-backdrop.has-art .music-backdrop-art {
-  opacity: 0.16;
+  opacity: 0.34;
+}
+
+#island[data-style="translucent"] .music-backdrop.has-art .music-backdrop-art {
+  opacity: 0.24;
+}
+
+#island[data-style="solid"] .music-backdrop.has-art .music-backdrop-art {
+  opacity: 0.18;
 }
 
 .music-backdrop-fallback {
@@ -8078,7 +8208,7 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 .music-backdrop-vignette {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.35) 100%);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.14) 0%, rgba(0, 0, 0, 0.44) 100%);
   pointer-events: none;
 }
 
@@ -8764,4 +8894,334 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 
 #island[data-shape="slim"][data-bar="on"] .island-ear {
   display: none;
+}
+
+/* ── Local File Converter View ──────────────────────────────────────────── */
+
+.drop-pick-btn {
+  margin-top: 4px;
+  height: 24px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  font: 500 11px var(--font);
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.drop-pick-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.conv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+}
+
+.conv-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.conv-file-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.conv-file-name {
+  font: 600 12.5px var(--font);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conv-file-meta {
+  font: 400 10.5px var(--font);
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 1px;
+}
+
+.conv-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.conv-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 21px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.65);
+  font: 500 9.5px var(--font);
+  cursor: default;
+}
+
+.conv-tool.missing {
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.conv-tool.missing:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+}
+
+.conv-tool-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.conv-tool.ok .conv-tool-dot {
+  background: #22c55e;
+}
+
+.conv-tool.installing .conv-tool-dot {
+  background: #f59e0b;
+  animation: conv-pulse 1s ease-in-out infinite;
+}
+
+@keyframes conv-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.conv-error-link {
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: 500 10px var(--font);
+  cursor: pointer;
+}
+
+.conv-error-link:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.conv-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  font: 500 10.5px var(--font);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.conv-pick-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.conv-clear-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.conv-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.conv-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.conv-empty {
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 10px 16px;
+}
+
+.conv-empty-title {
+  font: 400 11.5px var(--font);
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.conv-empty-caps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.conv-cap {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.56);
+  font: 500 10px var(--font);
+}
+
+.conv-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.conv-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, transform 0.12s ease;
+}
+
+.conv-opt:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.conv-opt.unavailable {
+  opacity: 0.52;
+}
+
+.conv-opt.unavailable:hover {
+  opacity: 0.78;
+}
+
+.conv-opt-title {
+  font: 600 11.5px var(--font);
+  color: #fff;
+}
+
+.conv-opt-sub {
+  font: 400 10px var(--font);
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.conv-status {
+  margin: auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: 500 11.5px var(--font);
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.conv-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  animation: conv-spin 0.7s linear infinite;
+}
+
+@keyframes conv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.conv-error {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(244, 80, 94, 0.32);
+  background: rgba(244, 80, 94, 0.12);
+  color: #fda4af;
+  font: 500 10.5px var(--font);
+}
+
+.conv-done {
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.26);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.conv-done-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.conv-done-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #07130e;
+  display: grid;
+  place-items: center;
+}
+
+.conv-done-name {
+  font: 600 12px var(--font);
+  color: #fff;
+}
+
+.conv-done-meta {
+  font: 400 10.5px var(--font);
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.conv-done-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
 }

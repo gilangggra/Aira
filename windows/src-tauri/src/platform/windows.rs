@@ -815,6 +815,48 @@ pub fn pick_folder(app: &AppHandle, start: Option<&str>, title: &str) -> Option<
     .flatten()
 }
 
+/// Native Windows file picker for converter input files. Runs in an STA thread.
+pub fn pick_file(app: &AppHandle, title: &str) -> Option<String> {
+    use ::windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_INPROC_SERVER};
+    use ::windows::Win32::UI::Shell::{
+        FileOpenDialog, IFileOpenDialog, FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST,
+        SIGDN_FILESYSPATH,
+    };
+
+    let owner = app
+        .get_webview_window(crate::island::WINDOW_LABEL)
+        .and_then(|w| hwnd_of(&w))
+        .map(|h| h.0 as isize);
+    let title = HSTRING::from(title);
+    std::thread::spawn(move || unsafe {
+        let initialized = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        if initialized.is_err() && initialized != RPC_E_CHANGED_MODE {
+            return None;
+        }
+        let picked = (|| -> Option<String> {
+            let dialog: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+            let options = dialog.GetOptions().ok()?;
+            dialog
+                .SetOptions(options | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST | FOS_FORCEFILESYSTEM)
+                .ok()?;
+            let _ = dialog.SetTitle(&title);
+            dialog.Show(owner.map(|raw| HWND(raw as *mut _))).ok()?;
+            let item = dialog.GetResult().ok()?;
+            let name = item.GetDisplayName(SIGDN_FILESYSPATH).ok()?;
+            let path = name.to_string().ok();
+            CoTaskMemFree(Some(name.0 as *const _));
+            path
+        })();
+        if initialized.is_ok() {
+            CoUninitialize();
+        }
+        picked
+    })
+    .join()
+    .ok()
+    .flatten()
+}
+
 #[cfg(test)]
 mod claude_launch_tests {
     use super::open_claude_with;

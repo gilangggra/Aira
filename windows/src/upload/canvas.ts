@@ -6,6 +6,7 @@
 // exactly as on macOS, because this canvas draws its own.
 
 import { State } from "../core/state";
+import { isConvertibleFileName } from "../core/converter";
 import { SCRIPT_FONTS } from "../core/fonts";
 import { N_, isRtl, t } from "../i18n/i18n";
 import {
@@ -17,9 +18,12 @@ const FONT = `system-ui, "Segoe UI Variable Text", "Segoe UI", ${SCRIPT_FONTS}, 
 
 /** The card's inner right edge: no text runs past it. */
 const TEXT_RIGHT = USC.CARD_X + USC.CARD_W - 16;
-/** The two choose buttons, as drawn and as hit areas. */
+/** The choose buttons, as drawn and as hit areas. */
 const ASK_BTN = { x: 114, w: 168 };
 const CANCEL_BTN = { x: 290, w: 120 };
+const ASK_WITH_CONV_BTN = { x: 114, w: 158 };
+const CONV_BTN = { x: 280, w: 112 };
+const CANCEL_WITH_CONV_BTN = { x: 400, w: 100 };
 /** Drop-zone chips (English keys, shown with `t()`). */
 const CHIPS = [N_("PDF"), N_("Images"), N_("Code"), N_("Docs")];
 
@@ -109,17 +113,22 @@ function fitted(ctx: CanvasRenderingContext2D, s: string, maxW: number, weight: 
 export interface UploadCanvasActions {
   /** Primary button — hand the file to the chat. */
   ask(): void;
+  /** Opens local file converter for the dropped file. */
+  convert(): void;
   /** Secondary button. */
   cancel(): void;
 }
 
 export class UploadCanvas {
-  /** Wrapper holding the canvas and the two invisible choose buttons. */
+  /** Wrapper holding the canvas and the invisible choose buttons. */
   readonly el: HTMLElement;
 
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D | null;
   private overlay: HTMLElement;
+  private askHit: HTMLButtonElement;
+  private convertHit: HTMLButtonElement;
+  private cancelHit: HTMLButtonElement;
   private sizedFor = 0;
   /** Where the drop text stops: sooner while the sessions are listed on the right. */
   textRight: number = TEXT_RIGHT;
@@ -141,9 +150,12 @@ export class UploadCanvas {
       b.addEventListener("click", onclick);
       return b;
     };
+    this.askHit = mk(ASK_BTN.x, ASK_BTN.w, actions.ask);
+    this.convertHit = mk(CONV_BTN.x, CONV_BTN.w, actions.convert);
+    this.cancelHit = mk(CANCEL_BTN.x, CANCEL_BTN.w, actions.cancel);
     this.overlay = document.createElement("div");
     this.overlay.id = "upload-overlay";
-    this.overlay.append(mk(ASK_BTN.x, ASK_BTN.w, actions.ask), mk(CANCEL_BTN.x, CANCEL_BTN.w, actions.cancel));
+    this.overlay.append(this.askHit, this.convertHit, this.cancelHit);
 
     this.el = document.createElement("div");
     this.el.id = "upload-layer";
@@ -170,7 +182,18 @@ export class UploadCanvas {
     this.drawScene(ctx, f, wallTime);
 
     // The buttons only exist once the choose card has faded in.
-    this.overlay.style.display = f.chooseAlpha > 0.5 ? "block" : "none";
+    const show = f.chooseAlpha > 0.5;
+    this.overlay.style.display = show ? "block" : "none";
+    if (show) {
+      const convertible = isConvertibleFileName(State.droppedFile?.name ?? "");
+      const askBox = convertible ? ASK_WITH_CONV_BTN : ASK_BTN;
+      const cancelBox = convertible ? CANCEL_WITH_CONV_BTN : CANCEL_BTN;
+      this.askHit.style.left = `${askBox.x}px`;
+      this.askHit.style.width = `${askBox.w}px`;
+      this.convertHit.style.display = convertible ? "block" : "none";
+      this.cancelHit.style.left = `${cancelBox.x}px`;
+      this.cancelHit.style.width = `${cancelBox.w}px`;
+    }
   }
 
   // ── Scene ─────────────────────────────────────────────────────────────────
@@ -346,17 +369,29 @@ export class UploadCanvas {
     const what = fitted(ctx, t("What do you want to do with it?"), maxW, 400, 12.5);
     text(ctx, what.s, 114, 100, what.font, "#9398A1");
 
+    const convertible = isConvertibleFileName(State.droppedFile?.name ?? "");
+    const askBox = convertible ? ASK_WITH_CONV_BTN : ASK_BTN;
+    const cancelBox = convertible ? CANCEL_WITH_CONV_BTN : CANCEL_BTN;
+
     ctx.fillStyle = "#F5F6F8";
-    rr(ctx, ASK_BTN.x, 113, ASK_BTN.w, 26, 13);
+    rr(ctx, askBox.x, 113, askBox.w, 26, 13);
     ctx.fill();
-    const ask = fitted(ctx, t("Ask a question about it"), ASK_BTN.w - 14, 500, 12.5);
-    text(ctx, ask.s, ASK_BTN.x + ASK_BTN.w / 2, 126, ask.font, "#0B0C0E", "center");
+    const ask = fitted(ctx, t("Ask a question about it"), askBox.w - 14, 500, 12.5);
+    text(ctx, ask.s, askBox.x + askBox.w / 2, 126, ask.font, "#0B0C0E", "center");
+
+    if (convertible) {
+      ctx.fillStyle = "rgba(255,255,255,0.16)";
+      rr(ctx, CONV_BTN.x, 113, CONV_BTN.w, 26, 13);
+      ctx.fill();
+      const conv = fitted(ctx, t("Convert"), CONV_BTN.w - 14, 500, 12.5);
+      text(ctx, conv.s, CONV_BTN.x + CONV_BTN.w / 2, 126, conv.font, "#F5F6F8", "center");
+    }
 
     ctx.fillStyle = "rgba(255,255,255,0.09)";
-    rr(ctx, CANCEL_BTN.x, 113, CANCEL_BTN.w, 26, 13);
+    rr(ctx, cancelBox.x, 113, cancelBox.w, 26, 13);
     ctx.fill();
-    const cancel = fitted(ctx, t("Cancel"), CANCEL_BTN.w - 14, 500, 12.5);
-    text(ctx, cancel.s, CANCEL_BTN.x + CANCEL_BTN.w / 2, 126, cancel.font, "#F1F2F4", "center");
+    const cancel = fitted(ctx, t("Cancel"), cancelBox.w - 14, 500, 12.5);
+    text(ctx, cancel.s, cancelBox.x + cancelBox.w / 2, 126, cancel.font, "#F1F2F4", "center");
     ctx.restore();
   }
 

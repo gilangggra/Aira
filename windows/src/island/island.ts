@@ -15,7 +15,7 @@ import {
 } from "../core/layout";
 import { Sound } from "../core/sound";
 import { State } from "../core/state";
-import { SPOTIFY_ID, Spotify, currentArtwork, isAd, islandDances, spotifyPosition } from "../core/spotify";
+import { SPOTIFY_ID, Spotify, currentArtwork, extractArtworkPalette, isAd, islandDances, spotifyPosition } from "../core/spotify";
 import { SpotifyLyrics, activeLyricLine } from "../core/lyrics";
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
@@ -346,7 +346,7 @@ export class Island {
         void Bridge.saveSettings(State.settings);
         State.notify();
       },
-      openSettingsWindow: () => void Bridge.openSettingsWindow(),
+      openSettingsWindow: (page?: string) => void Bridge.openSettingsWindow(page),
       blip: () => Sound.play("blip"),
       chooseOutfit: (selection) => {
         if (parseOutfit(State.settings.mochiOutfit) === selection) return;
@@ -385,6 +385,9 @@ export class Island {
           url: /^https?:\/\/\S+$/i.test(text.trim()) ? text.trim() : undefined,
         };
         this.setView("prompt");
+      },
+      pickConvertFile: () => {
+        void this.pickFileForConvert();
       },
       holdOpen: (on) => {
         if (this.holdingOpen === on) return;
@@ -527,12 +530,21 @@ export class Island {
           : null;
         this.setView("prompt");
       },
+      convert: () => {
+        this.setView("convert");
+      },
       cancel: () => this.discardDrop(),
     });
     this.sessionDrop = buildSessionDropList();
     this.uploadCanvas.el.append(this.sessionDrop.el);
 
-    this.musicBackdropImg = h("img", { class: "music-backdrop-art", alt: "", draggable: "false" }) as HTMLImageElement;
+    this.musicBackdropImg = h("img", {
+      class: "music-backdrop-art",
+      alt: "",
+      draggable: "false",
+      crossOrigin: "anonymous",
+    }) as HTMLImageElement;
+    this.musicBackdropImg.addEventListener("load", () => this.applyMusicPalette());
     this.musicBackdrop = h(
       "div",
       { class: "music-backdrop" },
@@ -968,6 +980,7 @@ export class Island {
   private swallow(path: string) {
     const name = path.split(/[\\/]/).pop() || "file";
     State.startNewChatSession();
+    State.droppedOriginalPath = path;
     State.droppedFile = { name, path };
     State.promptContext = { kind: "file", name, path };
     void Bridge.chatReset();
@@ -1010,9 +1023,26 @@ export class Island {
 
   /** "Cancel" on the dropped file: forget it, so the chat does not pick it up. */
   private discardDrop() {
+    State.droppedOriginalPath = null;
     State.droppedFile = null;
     State.promptContext = null;
     this.setView(State.defaultView());
+  }
+
+  private async pickFileForConvert() {
+    Sound.play("blip");
+    this.fsm.pinned = true;
+    this.fsm.cancelTimers();
+    const picked = await Bridge.converterPickFile();
+    this.fsm.pinned = State.isPinned || State.pendingApproval != null;
+    if (!picked) {
+      if (!this.fsm.pinned && !this.wasInIsland && this.fsm.state === "home") this.fsm.mouseLeft();
+      return;
+    }
+    const name = picked.split(/[\\/]/).pop() || "file";
+    State.droppedOriginalPath = picked;
+    State.droppedFile = { name, path: picked };
+    this.setView("convert");
   }
 
   /**
@@ -1868,30 +1898,42 @@ export class Island {
     if (musicHeroOn) {
       const cover = currentArtwork(Spotify.state);
       if (cover) {
-        if (this.musicBackdropImg.getAttribute("src") !== cover) this.musicBackdropImg.setAttribute("src", cover);
+        if (this.musicBackdropImg.getAttribute("src") !== cover) {
+          this.musicBackdropImg.setAttribute("src", cover);
+          if (this.musicBackdropImg.complete) this.applyMusicPalette();
+        }
         this.musicBackdrop.classList.add("has-art");
       } else {
         this.musicBackdrop.classList.remove("has-art");
         this.musicBackdropImg.removeAttribute("src");
+        this.clearMusicPalette();
       }
+    }
+
+    const snap = Weather.snapshot;
+    const hNow = new Date().getHours();
+    const isDayFallback = hNow >= 6 && hNow < 18;
+    const dayPhase = snap
+      ? resolveDayPhase(snap.isDay, snap.daily[0]?.sunrise, snap.daily[0]?.sunset)
+      : resolveDayPhase(isDayFallback);
+
+    if (live && !this.uploadActive) {
+      this.islandEl.dataset.phase = dayPhase;
+    } else {
+      delete this.islandEl.dataset.phase;
     }
 
     const weatherHeroOn = live && State.view === "weather" && !this.uploadActive;
     this.islandEl.dataset.weather = weatherHeroOn ? "on" : "off";
     this.weatherBackdrop.classList.toggle("on", weatherHeroOn);
     if (weatherHeroOn) {
-      const snap = Weather.snapshot;
       if (snap) {
         const cond = wmoCondition(snap.weatherCode, snap.isDay);
-        const phase = resolveDayPhase(snap.isDay, snap.daily[0]?.sunrise, snap.daily[0]?.sunset);
         this.weatherBackdrop.dataset.mood = cond.kind === "clear" ? (snap.isDay ? "clear-day" : "clear-night") : cond.kind;
-        this.weatherBackdrop.dataset.phase = phase;
       } else {
-        const hNow = new Date().getHours();
-        const isDayFallback = hNow >= 6 && hNow < 18;
         this.weatherBackdrop.dataset.mood = isDayFallback ? "clear-day" : "clear-night";
-        this.weatherBackdrop.dataset.phase = resolveDayPhase(isDayFallback);
       }
+      this.weatherBackdrop.dataset.phase = dayPhase;
     }
     this.islandEl.classList.toggle("has-dock", showDock);
     this.contentEl.style.opacity = live ? "1" : "0";
@@ -2123,6 +2165,41 @@ export class Island {
     Sound.play("finish");
     this.engine.triggerEmote("surprised");
     this.alert("reminder");
+  }
+
+  /** Samples the loaded album cover into a 16x16 canvas and updates CSS gradient vars. */
+  private applyMusicPalette() {
+    const img = this.musicBackdropImg;
+    if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) return;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 16;
+      canvas.height = 16;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, 16, 16);
+      const palette = extractArtworkPalette(ctx.getImageData(0, 0, 16, 16).data);
+      if (!palette) {
+        this.clearMusicPalette();
+        return;
+      }
+      const [r1, g1, b1] = palette.primary;
+      const [r2, g2, b2] = palette.secondary;
+      this.islandEl.style.setProperty("--music-grad-1", `rgba(${r1}, ${g1}, ${b1}, 0.56)`);
+      this.islandEl.style.setProperty("--music-grad-2", `rgba(${r2}, ${g2}, ${b2}, 0.42)`);
+      this.islandEl.style.setProperty(
+        "--music-ear",
+        `rgba(${Math.round(r1 * 0.34 + 12)}, ${Math.round(g1 * 0.34 + 13)}, ${Math.round(b1 * 0.34 + 16)}, 0.96)`,
+      );
+    } catch {
+      this.clearMusicPalette();
+    }
+  }
+
+  private clearMusicPalette() {
+    this.islandEl.style.removeProperty("--music-grad-1");
+    this.islandEl.style.removeProperty("--music-grad-2");
+    this.islandEl.style.removeProperty("--music-ear");
   }
 
   get panelSize() {
