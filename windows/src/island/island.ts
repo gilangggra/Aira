@@ -8,7 +8,7 @@ import {
 } from "../core/closed";
 import {
   CHAT_OVERLAY_H, COMPACT_W, EXPANDED_CORNER, EXPANDED_W, NOTCH_H, NOTCH_W, PANEL_H, PANEL_W,
-  ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
+  ROUNDED_CORNER, VIEW_LAYOUTS, botPosition, chatPromptHeight,
   islandSize,
   QUESTION_PICKER_H,
   type BotEmoteName, type IslandMode, type IslandViewName,
@@ -47,6 +47,55 @@ import { UPDATE_BLUE, showsUpdateHint } from "../whats-new/whats-new";
 
 const BOT_OVERHANG = 40;
 const SVG_NS = "http://www.w3.org/2000/svg";
+const PLAN_RING_CIRCUMFERENCE = 2 * Math.PI * 4.5;
+
+function makeCompactSvg(paths: string[]): SVGSVGElement {
+  const el = document.createElementNS(SVG_NS, "svg");
+  el.setAttribute("viewBox", "0 0 16 16");
+  el.setAttribute("fill", "none");
+  el.setAttribute("width", "11");
+  el.setAttribute("height", "11");
+  el.setAttribute("aria-hidden", "true");
+  for (const d of paths) {
+    const p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", d);
+    p.setAttribute("stroke", "currentColor");
+    p.setAttribute("stroke-width", "1.6");
+    p.setAttribute("stroke-linecap", "round");
+    p.setAttribute("stroke-linejoin", "round");
+    el.appendChild(p);
+  }
+  return el;
+}
+
+function makePlanRingSvg(): { svg: SVGSVGElement; arc: SVGCircleElement } {
+  const el = document.createElementNS(SVG_NS, "svg");
+  el.setAttribute("viewBox", "0 0 12 12");
+  el.setAttribute("width", "12");
+  el.setAttribute("height", "12");
+  el.setAttribute("class", "compact-plan-ring");
+  el.setAttribute("aria-hidden", "true");
+  const track = document.createElementNS(SVG_NS, "circle");
+  track.setAttribute("cx", "6");
+  track.setAttribute("cy", "6");
+  track.setAttribute("r", "4.5");
+  track.setAttribute("fill", "none");
+  track.setAttribute("stroke", "rgba(255,255,255,0.16)");
+  track.setAttribute("stroke-width", "1.75");
+  const arc = document.createElementNS(SVG_NS, "circle");
+  arc.setAttribute("cx", "6");
+  arc.setAttribute("cy", "6");
+  arc.setAttribute("r", "4.5");
+  arc.setAttribute("fill", "none");
+  arc.setAttribute("stroke", "var(--plan)");
+  arc.setAttribute("stroke-width", "1.75");
+  arc.setAttribute("stroke-linecap", "round");
+  arc.setAttribute("stroke-dasharray", PLAN_RING_CIRCUMFERENCE.toFixed(2));
+  arc.setAttribute("stroke-dashoffset", PLAN_RING_CIRCUMFERENCE.toFixed(2));
+  arc.setAttribute("transform", "rotate(-90 6 6)");
+  el.append(track, arc);
+  return { svg: el, arc };
+}
 
 function makeEarSvg(side: "left" | "right"): SVGSVGElement {
   const el = document.createElementNS(SVG_NS, "svg");
@@ -122,10 +171,11 @@ export class Island {
   private collapsedTo = { w: 0, h: 0 };
   private countdown!: HTMLElement;
   private compactPlan!: HTMLElement;
-  private compactPlanDot!: HTMLElement;
+  private compactPlanArc!: SVGCircleElement;
   private compactPlanLabel!: HTMLElement;
   private compactAgenda!: HTMLElement;
   private compactAgendaLabel!: HTMLElement;
+  private compactAgendaCount!: HTMLElement;
   private compactWeather!: HTMLElement;
   private compactWeatherIcon!: HTMLElement;
   private compactWeatherLabel!: HTMLElement;
@@ -412,7 +462,8 @@ export class Island {
     this.miniGrid = h("div", { id: "mini-grid" });
     this.clockEl = h("div", { id: "island-clock" });
     this.countdown = h("div", { id: "countdown" });
-    this.compactPlanDot = h("i", { class: "compact-plan-dot" });
+    const planRing = makePlanRingSvg();
+    this.compactPlanArc = planRing.arc;
     this.compactPlanLabel = h("span", { class: "compact-plan-label" });
     this.compactPlan = h(
       "button",
@@ -428,10 +479,21 @@ export class Island {
           if (me.button === 0) this.openClaudePlan();
         },
       },
-      this.compactPlanDot,
+      planRing.svg,
       this.compactPlanLabel,
     );
+    const agendaIcon = h(
+      "span",
+      { class: "compact-agenda-ico" },
+      makeCompactSvg([
+        "M3.5 4.5h9a1.2 1.2 0 0 1 1.2 1.2v6.8a1.2 1.2 0 0 1-1.2 1.2h-9a1.2 1.2 0 0 1-1.2-1.2V5.7a1.2 1.2 0 0 1 1.2-1.2z",
+        "M5.5 2.5v2",
+        "M10.5 2.5v2",
+        "M2.5 7.2h11",
+      ]),
+    );
     this.compactAgendaLabel = h("span", { class: "compact-agenda-label" });
+    this.compactAgendaCount = h("span", { class: "compact-agenda-count" });
     this.compactAgenda = h(
       "button",
       {
@@ -446,8 +508,9 @@ export class Island {
           if (me.button === 0) this.openAgenda();
         },
       },
-      h("i", { class: "compact-agenda-dot" }),
+      agendaIcon,
       this.compactAgendaLabel,
+      this.compactAgendaCount,
     );
     this.compactWeatherIcon = h("span", { class: "compact-weather-ico" });
     this.compactWeatherLabel = h("span", { class: "compact-weather-label" });
@@ -471,6 +534,14 @@ export class Island {
       this.compactWeatherDot,
     );
     this.compactAiradoroLabel = h("span", { class: "compact-airadoro-label" });
+    const airadoroIcon = h(
+      "span",
+      { class: "compact-airadoro-ico" },
+      makeCompactSvg([
+        "M8 4.8V8l2.2 1.4",
+        "M8 2.3a5.7 5.7 0 1 0 0 11.4 5.7 5.7 0 0 0 0-11.4z",
+      ]),
+    );
     this.compactAiradoro = h(
       "button",
       {
@@ -489,7 +560,7 @@ export class Island {
           }
         },
       },
-      h("i", { class: "compact-airadoro-dot" }),
+      airadoroIcon,
       this.compactAiradoroLabel,
     );
     this.compactLyricText = h("span", { class: "compact-lyric-text" });
@@ -1094,27 +1165,46 @@ export class Island {
     return activeLyricLine(SpotifyLyrics.current, spotifyPosition(Spotify.state, Date.now()));
   }
 
+  private currentCompactMusicLabel(): string | null {
+    const track = Spotify.state.track;
+    if (!State.spotifyPlaying || !track || isAd(track)) return null;
+    const lyric = this.currentSyncedLyric();
+    if (lyric) return lyric;
+    if (!track.title) return null;
+    return track.artist ? `${track.title} · ${track.artist}` : track.title;
+  }
+
   private applyCompactLayout() {
     const hover = this.wasInIsland && State.mode === "compact";
-    const padX = hover ? 18 : 14;
-    const gap = 7;
+    const padX = hover ? 16 : 14;
+    const gap = 6;
     const otherCount = 0; // Mini-grid (mochi on the right) hidden per user request
     const hasWeather = false; // Weather pill on compact notch hidden per user request
-    const lyric = State.mode === "compact" ? this.currentSyncedLyric() : null;
-    const hasLyric = Boolean(lyric);
+    const musicLabel = State.mode === "compact" ? this.currentCompactMusicLabel() : null;
+    const hasLyric = Boolean(musicLabel);
     const hasClock = State.settings.showClock && !hasLyric;
     const hasAiradoro = Airadoro.snapshot.phase !== "idle";
     const pendingToday = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
     const hasAgenda = pendingToday > 0;
     const hasPlan = claudeCompactPillVisible();
+    const hasAnyInfo = hasPlan || hasAgenda || hasAiradoro || hasClock || hasLyric || hasWeather || otherCount > 0;
 
     const gridW = otherCount === 0 ? 0 : otherCount === 1 ? 16 : 30;
     const gridH = otherCount === 0 ? 0 : otherCount <= 2 ? 16 : 30;
     this.compactGridH = gridH;
 
+    if (!hasAnyInfo) {
+      const w = hover ? COMPACT_W + 18 : COMPACT_W;
+      const h = NOTCH_H + (hover ? 2 : 0);
+      this.compactBotCx = w / 2;
+      this.compactTargetW = w;
+      this.compactTargetH = h;
+      return;
+    }
+
     // Left cluster: Mochi + Weather pill + optional Clock / Lyrics.
     let leftCursor = padX;
-    this.compactBotCx = leftCursor + 24;
+    this.compactBotCx = leftCursor + 20;
     leftCursor = this.compactBotCx + 16;
 
     if (hasWeather) {
@@ -1123,11 +1213,10 @@ export class Island {
     }
 
     // Measure right cluster widths (from right edge inward).
-    const airaW = hasAiradoro ? Math.max(48, Math.ceil(this.compactAiradoro.offsetWidth || 56)) : 0;
-    const agendaW = hasAgenda ? Math.max(30, Math.ceil(this.compactAgenda.offsetWidth || 34)) : 0;
-    const planW = hasPlan ? Math.max(36, Math.ceil(this.compactPlan.offsetWidth || 42)) : 0;
-    const clockW = hasClock ? Math.max(76, Math.ceil(this.clockEl.scrollWidth || 88)) : 0;
-    const lyricW = hasLyric ? Math.max(120, Math.min(200, Math.ceil(this.compactLyricText.scrollWidth + 24 || 150))) : 0;
+    const airaW = hasAiradoro ? Math.max(48, Math.ceil(this.compactAiradoro.offsetWidth || 54)) : 0;
+    const agendaW = hasAgenda ? Math.max(44, Math.min(116, Math.ceil(this.compactAgenda.offsetWidth || 76))) : 0;
+    const planW = hasPlan ? Math.max(40, Math.ceil(this.compactPlan.offsetWidth || 46)) : 0;
+    const clockW = hasClock ? Math.max(72, Math.ceil(this.clockEl.scrollWidth || 84)) : 0;
 
     let rightNeeded = padX;
     if (gridW > 0) rightNeeded += gridW + gap;
@@ -1135,10 +1224,15 @@ export class Island {
     if (hasAgenda) rightNeeded += agendaW + gap;
     if (hasAiradoro) rightNeeded += airaW + gap;
 
+    const maxLyricW = Math.max(180, EXPANDED_W - leftCursor - rightNeeded - gap * 2);
+    const lyricW = hasLyric
+      ? Math.max(110, Math.min(maxLyricW, Math.ceil((this.compactLyricText.scrollWidth || 110) + 28)))
+      : 0;
+
     const centerNeeded = hasLyric ? lyricW + gap * 2 : hasClock ? clockW + gap * 2 : 0;
     const minNeededW = leftCursor + centerNeeded + rightNeeded;
-    const baseW = Math.max(hasLyric ? 396 : COMPACT_W, Math.round(minNeededW));
-    const w = hover ? baseW + 24 : baseW;
+    const baseW = Math.max(COMPACT_W, Math.round(minNeededW));
+    const w = hover ? baseW + 18 : baseW;
     const h = (otherCount >= 3 ? 38 : NOTCH_H) + (hover ? 2 : 0);
 
     // Anchor right-side indicators cleanly from the right edge of the capsule.
@@ -1334,22 +1428,19 @@ export class Island {
   private scheduleClosedLife() {
     if (this.closedLife != null) window.clearTimeout(this.closedLife);
     this.closedLife = null;
+    this.closedLook = { x: 0, y: 0 };
     if (State.mode !== "hidden" || closedIsland(State.settings.closedIsland) !== "mochi") {
-      this.closedLook = { x: 0, y: 0 };
       return;
     }
     this.closedLife = window.setTimeout(() => {
       this.closedLife = null;
       if (State.mode !== "hidden" || State.paused) return this.scheduleClosedLife();
-      if (Math.random() < 0.55) {
-        this.engine.blink();
-      } else {
-        this.closedLook = { x: (Math.random() * 2 - 1) * 0.8, y: (Math.random() * 2 - 1) * 0.3 };
-      }
+      this.closedLook = { x: 0, y: 0 };
+      this.engine.blink();
       this.closedAwakeUntil = performance.now() + 700;
       this.ensureRunning();
       this.scheduleClosedLife();
-    }, 2500 + Math.random() * 3500);
+    }, 2400 + Math.random() * 2800);
   }
 
   /** The pointer is on the folded window (Rust's `closed-hover`): the island wakes. */
@@ -1720,9 +1811,9 @@ export class Island {
       this.width.animating || this.height.animating || this.radius.animating;
     const botMoving = !this.botCx.settled || !this.botCy.settled || !this.botSize.settled;
     // Closed, only the folding — and Mochi reaching his place in the closed island.
+    const closedMochiActive = !this.isSlimShape && closedIsland(State.settings.closedIsland) === "mochi" && !State.paused && !State.mochiOnDesktop;
     const busy = State.mode === "hidden"
-      ? settling || (closedIsland(State.settings.closedIsland) === "mochi" &&
-        (botMoving || nowMs < this.closedAwakeUntil))
+      ? settling || closedMochiActive || (closedIsland(State.settings.closedIsland) === "mochi" && (botMoving || nowMs < this.closedAwakeUntil))
       : settling ||
       !this.botCx.settled || !this.botCy.settled || !this.botSize.settled ||
       greetingActive || this.engine.busy || UploadSeq.isActive || viewAnimating;
@@ -1757,19 +1848,7 @@ export class Island {
     const visible = p.opacity > 0 && !greetingActive && !this.uploadActive && !away;
     this.botCanvas.style.opacity = visible ? "1" : "0";
 
-    if (State.mode === "expanded" && State.view !== "uploading" && !greetingActive && !this.uploadActive && !away) {
-      const d = p.diameter;
-      const color = botGlowColor(State.effectiveState);
-      this.botGlow.style.display = "block";
-      this.botGlow.style.width = `${d * 2.2}px`;
-      this.botGlow.style.height = `${d * 2.2}px`;
-      this.botGlow.style.left = `${this.botCx.value - d * 1.1}px`;
-      this.botGlow.style.top = `${this.botCy.value - d * 1.1}px`;
-      this.botGlow.style.background = `radial-gradient(circle, ${color} 0%, transparent 62%)`;
-      this.botGlow.style.opacity = String(botGlowOpacity(State.effectiveState));
-    } else {
-      this.botGlow.style.display = "none";
-    }
+    this.botGlow.style.display = "none";
   }
 
   private drawBot(dt: number) {
@@ -1807,6 +1886,11 @@ export class Island {
           ? hexToRGB(focus.color)
           : null;
     this.engine.particleOverhang = BOT_OVERHANG;
+    const tune = State.settings.mochiTune;
+    if (tune) {
+      this.engine.tune = tune;
+      Sound.robotAccentEnabled = tune.robotSound !== false;
+    }
     this.engine.lookX = this.lookX();
     this.engine.lookY = this.lookY();
     if (this.engine.morph > 0.3) {
@@ -1987,6 +2071,9 @@ export class Island {
       const pct = dominantPct(State.planUsage);
       const color = planColor(pct);
       this.compactPlan.style.setProperty("--plan", color);
+      const clamped = pct != null ? Math.max(0, Math.min(100, pct)) : 0;
+      const offset = PLAN_RING_CIRCUMFERENCE * (1 - clamped / 100);
+      this.compactPlanArc.setAttribute("stroke-dashoffset", offset.toFixed(2));
       this.compactPlanLabel.textContent = pct != null ? `${Math.round(pct)}%` : "—";
     }
 
@@ -2019,12 +2106,27 @@ export class Island {
     }
 
     // Compact agenda pending tasks indicator
-    const pendingToday = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
+    const todayPending = tasksForDay(loadAgendaTasks(), dayKey(new Date())).filter((t) => !t.completed);
+    const pendingToday = todayPending.length;
     const showAgenda = State.mode === "compact" && pendingToday > 0;
     this.compactAgenda.style.opacity = showAgenda ? "1" : "0";
     this.compactAgenda.style.pointerEvents = showAgenda ? "auto" : "none";
     if (showAgenda) {
-      this.compactAgendaLabel.textContent = String(pendingToday);
+      const next = todayPending[0];
+      const labelText = next?.title
+        ? next.time
+          ? `${next.time} · ${next.title}`
+          : next.title
+        : `${tl("Calendar")} (${pendingToday})`;
+      this.compactAgendaLabel.textContent = labelText;
+      if (pendingToday > 1) {
+        this.compactAgendaCount.textContent = `+${pendingToday - 1}`;
+        this.compactAgendaCount.style.display = "inline-flex";
+      } else {
+        this.compactAgendaCount.textContent = "";
+        this.compactAgendaCount.style.display = "none";
+      }
+      this.compactAgenda.title = `${tl("Calendar")} (${pendingToday}): ${labelText}`;
     }
 
     // Compact live weather pill: hidden per user request
@@ -2051,12 +2153,12 @@ export class Island {
   }
 
   private syncCompactLyric() {
-    const lyric = State.mode === "compact" ? this.currentSyncedLyric() : null;
-    const on = Boolean(lyric);
+    const label = State.mode === "compact" ? this.currentCompactMusicLabel() : null;
+    const on = Boolean(label);
     this.compactLyric.style.opacity = on ? "1" : "0";
     this.compactLyric.style.pointerEvents = on ? "auto" : "none";
-    if (on && lyric && this.compactLyricText.textContent !== lyric) {
-      this.compactLyricText.textContent = lyric;
+    if (on && label && this.compactLyricText.textContent !== label) {
+      this.compactLyricText.textContent = label;
     }
 
     const needTick =
@@ -2077,7 +2179,7 @@ export class Island {
         }
         if (State.mode === "compact") {
           const prev = this.compactLyricText.textContent || "";
-          const cur = this.currentSyncedLyric() || "";
+          const cur = this.currentCompactMusicLabel() || "";
           if (prev !== cur) {
             this.syncCompactLyric();
             this.applyCompactLayout();

@@ -1652,13 +1652,26 @@ mod win {
             }
             let props = match read {
                 Some((snap, props)) => {
+                    let was_playing = s.state.playing;
+                    let same_track = s.state.track.as_ref().map(|t| &t.id)
+                        == snap.track.as_ref().map(|t| &t.id);
+                    let resumed = !was_playing
+                        && snap.playing
+                        && same_track
+                        && (snap.position - s.state.position).abs() < 0.25;
                     s.state.running = true;
                     s.state.installed = true;
                     s.state.track = snap.track;
                     s.state.playing = snap.playing;
                     // The position was true when Windows last updated it; while
-                    // playing, the page runs it on from there.
-                    let at = snap.updated_at.filter(|&t| t <= now).unwrap_or(now);
+                    // playing, the page runs it on from there. On resume from
+                    // pause, SMTC can keep the old pre-pause LastUpdatedTime,
+                    // so anchor at `now` instead of jumping ahead.
+                    let at = if resumed {
+                        now
+                    } else {
+                        snap.updated_at.filter(|&t| t <= now).unwrap_or(now)
+                    };
                     s.state.anchor(snap.position, at);
                     s.state.shuffle = snap.shuffle;
                     s.state.repeat = snap.repeat;

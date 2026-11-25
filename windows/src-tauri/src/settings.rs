@@ -130,6 +130,36 @@ pub struct Settings {
     /// (agy_approvals.rs). Off by default; owned by the Rust side like `phone_link`, so
     /// what a webview sends back is ignored. The Mac's key is the same.
     pub agy_approvals_enabled: bool,
+    /// User-configurable EMO mascot eye & motion tuning (Settings → Appearance).
+    pub mochi_tune: MochiTune,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MochiTune {
+    pub eye_scale: f64,
+    pub blink_rate: f64,
+    pub drift: f64,
+    pub overshoot: f64,
+    pub sac_thresh: f64,
+    pub antic: f64,
+    pub robot_sound: bool,
+    pub eye_color: String,
+}
+
+impl Default for MochiTune {
+    fn default() -> Self {
+        Self {
+            eye_scale: 1.0,
+            blink_rate: 1.0,
+            drift: 1.0,
+            overshoot: 1.6,
+            sac_thresh: 14.0,
+            antic: 9.0,
+            robot_sound: true,
+            eye_color: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -207,6 +237,7 @@ impl Default for Settings {
             island_style: "glass".into(),
             island_shape: "notch".into(),
             agy_approvals_enabled: false,
+            mochi_tune: MochiTune::default(),
         }
     }
 }
@@ -514,7 +545,17 @@ mod tests {
   "islandScale": "normal",
   "islandStyle": "solid",
   "islandShape": "island",
-  "agyApprovalsEnabled": true
+  "agyApprovalsEnabled": true,
+  "mochiTune": {
+    "eyeScale": 1.15,
+    "blinkRate": 1.4,
+    "drift": 0.8,
+    "overshoot": 2.0,
+    "sacThresh": 12.0,
+    "antic": 6.0,
+    "robotSound": false,
+    "eyeColor": "#7DD3FC"
+  }
 }"##;
 
     fn custom() -> Value {
@@ -1052,6 +1093,7 @@ mod tests {
                 "islandStyle",
                 "islandShape",
                 "agyApprovalsEnabled",
+                "mochiTune",
             ]
         );
         let _ = std::fs::remove_dir_all(&dir);

@@ -26,8 +26,8 @@ const ISLAND = "island";
  */
 const DRAW_W = PANEL_SIZE * 0.8;
 const SIDE = (PANEL_SIZE - DRAW_W) / 2;
-/** Frame pacing: TimelineView(minimumInterval: 1/30) awake; asleep, barely. */
-const AWAKE_FRAME_MS = 1000 / 30;
+/** Frame pacing: 60 fps awake for fluid EMO spring eyes; asleep, barely. */
+const AWAKE_FRAME_MS = 1000 / 60;
 const ASLEEP_FRAME_MS = 250;
 
 class DesktopMochi {
@@ -66,6 +66,7 @@ class DesktopMochi {
     const dpr = this.dpr();
     canvas.width = Math.round(PANEL_SIZE * dpr);
     canvas.height = Math.round(PANEL_SIZE * dpr);
+    this.engine.showVisorBody = true;
     this.engine.particleOverhang = 0;
     this.engine.setState("idle", true);
     // Three pokes: dizzy, and the island shows the confused view (as on macOS).

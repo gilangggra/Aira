@@ -476,8 +476,6 @@ export function hero(page: string, title: string, subtitle: string | null, actio
   el.style.setProperty("--hero-tint", rgba(theme.color, 0.1));
   const back = document.createElement("canvas");
   back.className = "backdrop";
-  const mochis = document.createElement("canvas");
-  mochis.className = "troupe";
   const copy = document.createElement("div");
   copy.className = "copy";
   const h1 = document.createElement("h1");
@@ -494,9 +492,9 @@ export function hero(page: string, title: string, subtitle: string | null, actio
     row.append(...actions);
     copy.append(row);
   }
-  el.append(back, mochis, copy);
+  el.append(back, copy);
   backdrop(back, theme.color, el);
-  troupe(mochis, theme.cast, compact ? 280 : 340);
+  void troupe;
   return el;
 }
 

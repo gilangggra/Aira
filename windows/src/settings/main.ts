@@ -10,7 +10,7 @@ import {
   ISLAND_SHORTCUTS, SHORTCUTS, SHORTCUT_TEXT, activeKeys, displayKeys, duplicates, effective,
   recordPress, type Binding,
 } from "../core/shortcuts";
-import { DEFAULT_SETTINGS, type Settings } from "../core/state";
+import { DEFAULT_MOCHI_TUNE, DEFAULT_SETTINGS, type MochiTune, type Settings } from "../core/state";
 import { closedIsland } from "../core/closed";
 import type { UpdateStatus } from "../core/update";
 import { SOUND_NAMES } from "../core/sound";
@@ -1316,6 +1316,86 @@ function generalSections(): HTMLElement[] {
   const sound = toggle(settings.soundEnabled, (v) => { settings.soundEnabled = v; void save(); });
   const openOnHover = toggle(settings.openOnHover, (v) => { settings.openOnHover = v; void save(); });
   const autostart = toggle(settings.autostart, (v) => { settings.autostart = v; void save(); });
+
+  const ensureTune = (): MochiTune => {
+    if (!settings.mochiTune) settings.mochiTune = { ...DEFAULT_MOCHI_TUNE };
+    return settings.mochiTune;
+  };
+  const robotSound = toggle(ensureTune().robotSound, (v) => {
+    ensureTune().robotSound = v;
+    void save();
+  });
+
+  const EYE_COLORS: { val: string; bg: string; label: string }[] = [
+    { val: "", bg: "#EEF2F6", label: t("Auto") },
+    { val: "#7DD3FC", bg: "#7DD3FC", label: t("Cyan") },
+    { val: "#6EE7B7", bg: "#6EE7B7", label: t("Mint") },
+    { val: "#FDE68A", bg: "#FDE68A", label: t("Amber") },
+    { val: "#FDA4AF", bg: "#FDA4AF", label: t("Rose") },
+  ];
+  const colorWrap = h("div", { class: "segmented", style: "gap:6px; padding:4px 6px;" });
+  const colorBtns: { val: string; el: HTMLButtonElement }[] = [];
+  const syncColorBtns = () => {
+    const cur = ensureTune().eyeColor || "";
+    for (const b of colorBtns) {
+      b.el.style.outline = cur === b.val ? "2px solid var(--fg, #fff)" : "none";
+      b.el.style.outlineOffset = "2px";
+    }
+  };
+  for (const c of EYE_COLORS) {
+    const btn = h("button", {
+      type: "button",
+      title: c.label,
+      style: `width:18px;height:18px;border-radius:999px;border:1px solid rgba(255,255,255,0.25);background:${c.bg};cursor:pointer;padding:0;`,
+      onclick: () => {
+        ensureTune().eyeColor = c.val;
+        syncColorBtns();
+        void save();
+      },
+    }) as HTMLButtonElement;
+    colorBtns.push({ val: c.val, el: btn });
+    colorWrap.append(btn);
+  }
+  syncColorBtns();
+
+  type NumTuneKey = "eyeScale" | "blinkRate" | "drift" | "overshoot" | "sacThresh" | "antic";
+  const tuneSliders: { key: NumTuneKey; input: HTMLInputElement; label: HTMLElement; fmt: (v: number) => string }[] = [];
+  const makeTuneSlider = (
+    key: NumTuneKey,
+    min: number, max: number, step: number,
+    fmt: (v: number) => string = (v) => v.toFixed(step < 1 ? 1 : 0),
+  ) => {
+    const val = ensureTune()[key];
+    const lbl = h("span", { class: "hint", text: fmt(val), style: "min-width:38px;text-align:right;" });
+    const input = h("input", { type: "range", min: String(min), max: String(max), step: String(step) }) as HTMLInputElement;
+    input.value = String(val);
+    input.addEventListener("input", () => {
+      const n = Number(input.value);
+      ensureTune()[key] = n;
+      lbl.textContent = fmt(n);
+    });
+    input.addEventListener("change", () => { void save(); });
+    tuneSliders.push({ key, input, label: lbl, fmt });
+    return [input, lbl] as const;
+  };
+
+  const [eyeScaleIn, eyeScaleLbl] = makeTuneSlider("eyeScale", 0.8, 1.3, 0.05, (v) => `${Math.round(v * 100)}%`);
+  const [blinkRateIn, blinkRateLbl] = makeTuneSlider("blinkRate", 0.4, 2.5, 0.1, (v) => `${v.toFixed(1)}x`);
+  const [driftIn, driftLbl] = makeTuneSlider("drift", 0, 2.5, 0.1);
+  const [overshootIn, overshootLbl] = makeTuneSlider("overshoot", 0, 3.0, 0.1);
+  const [sacThreshIn, sacThreshLbl] = makeTuneSlider("sacThresh", 6, 30, 1);
+  const [anticIn, anticLbl] = makeTuneSlider("antic", 0, 16, 1);
+
+  const resetTune = h("button", {
+    type: "button",
+    text: t("Reset to defaults"),
+    onclick: () => {
+      settings.mochiTune = { ...DEFAULT_MOCHI_TUNE };
+      generalSync?.();
+      void save();
+    },
+  });
+
   generalSync = () => {
     setSwitch(sound, settings.soundEnabled);
     setSwitch(openOnHover, settings.openOnHover);
@@ -1324,6 +1404,15 @@ function generalSections(): HTMLElement[] {
     scaleCtrl.setValue(settings.islandScale || "normal");
     styleCtrl.setValue(settings.islandStyle || "glass");
     shapeCtrl.setValue(settings.islandShape || "notch");
+    setSwitch(robotSound, ensureTune().robotSound);
+    syncColorBtns();
+    for (const sl of tuneSliders) {
+      if (document.activeElement !== sl.input) {
+        const v = ensureTune()[sl.key];
+        sl.input.value = String(v);
+        sl.label.textContent = sl.fmt(v);
+      }
+    }
     // A field being edited keeps what is in it; it catches up when it is left.
     if (document.activeElement !== volume) {
       volume.value = String(settings.soundVolume);
@@ -1401,6 +1490,19 @@ function generalSections(): HTMLElement[] {
     ),
   );
 
+  const mascotCard = card(
+    t("Mascot tuner"),
+    settingItem(t("Eye glow color"), t("Custom color for the eyes in the island."), colorWrap),
+    settingItem(t("Robot sound accents"), t("Subtle servo and chirp accents when the eyes react."), robotSound),
+    settingItem(t("Eye size"), null, eyeScaleIn, eyeScaleLbl),
+    settingItem(t("Blink frequency"), null, blinkRateIn, blinkRateLbl),
+    settingItem(t("Idle drift"), null, driftIn, driftLbl),
+    settingItem(t("Gaze overshoot"), null, overshootIn, overshootLbl),
+    settingItem(t("Saccade threshold"), null, sacThreshIn, sacThreshLbl),
+    settingItem(t("Expression anticipation"), null, anticIn, anticLbl),
+    settingItem(t("Mascot defaults"), null, resetTune),
+  );
+
   const soundCard = card(
     t("Sound"),
     settingItem(t("Sound"), null, sound, volume, volumePercent),
@@ -1414,7 +1516,7 @@ function generalSections(): HTMLElement[] {
   const recapCard = card(t("Weekly recap"), ...recapRows());
   const updatesCard = card(t("Updates"), ...updateRows(toggle, version));
 
-  return [generalCard, behaviorCard, displayCard, soundCard, recapCard, updatesCard];
+  return [generalCard, behaviorCard, displayCard, mascotCard, soundCard, recapCard, updatesCard];
 }
 
 /**

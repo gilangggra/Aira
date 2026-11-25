@@ -18,6 +18,7 @@ export type SoundName = (typeof SOUND_NAMES)[number];
 
 class SoundEngine {
   enabled = true;
+  robotAccentEnabled = true;
   volume = 0.12;
 
   private ctx: AudioContext | null = null;
@@ -29,6 +30,8 @@ class SoundEngine {
   customized = new Set<string>();
   /** Sounds still playing, by name, so one can be faded out (the greeting). */
   private playing = new Map<string, Set<{ src: AudioBufferSourceNode; gain: GainNode }>>();
+  private lastServoAt = 0;
+  private lastChirpAt = 0;
 
   /** Creates the context and decodes every WAV. Safe to call more than once. */
   preload(): Promise<void> {
@@ -161,6 +164,97 @@ class SoundEngine {
       }
     }
   }
+
+  /** Subtle robotic servo sweep for quick eye saccades (hybrid accent, throttled). */
+  playServo(intensity = 0.7) {
+    if (!this.enabled || !this.robotAccentEnabled || !this.ctx || !this.master || this.ctx.state !== "running") return;
+    const now = performance.now();
+    if (now - this.lastServoAt < 160) return;
+    this.lastServoAt = now;
+    try {
+      const c = this.ctx;
+      const t = c.currentTime;
+      const osc = c.createOscillator();
+      const gain = c.createGain();
+      const f = 820 + Math.random() * 280;
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(f, t);
+      osc.frequency.exponentialRampToValueAtTime(f * 1.32, t + 0.05);
+      const peak = 0.045 * Math.max(0.1, Math.min(1, intensity));
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(peak, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0003, t + 0.06);
+      osc.connect(gain);
+      gain.connect(this.master);
+      osc.start(t);
+      osc.stop(t + 0.07);
+      osc.onended = () => gain.disconnect();
+    } catch {
+      /* ignore audio context errors */
+    }
+  }
+
+  /** Subtle synthesized robotic chirp accent for eye interactions (hybrid). */
+  playChirp(type: "happy" | "curious" | "surprised" | "sad" | "annoyed" | "idle" = "idle") {
+    if (!this.enabled || !this.robotAccentEnabled || !this.ctx || !this.master || this.ctx.state !== "running") return;
+    const now = performance.now();
+    if (now - this.lastChirpAt < 90) return;
+    this.lastChirpAt = now;
+    const spec = ROBOT_CHIRPS[type] ?? ROBOT_CHIRPS.idle;
+    try {
+      const c = this.ctx;
+      const t = c.currentTime;
+      const pitch = 0.94 + Math.random() * 0.12;
+      const o1 = c.createOscillator();
+      const o2 = c.createOscillator();
+      const mix = c.createGain();
+      const sub = c.createGain();
+      sub.gain.value = 0.42;
+      o1.type = spec.a;
+      o2.type = spec.b;
+      o1.connect(mix);
+      o2.connect(sub);
+      sub.connect(mix);
+      mix.connect(this.master);
+
+      const n = spec.f.length;
+      spec.f.forEach((freq, i) => {
+        const tm = t + (spec.d * i) / Math.max(1, n - 1);
+        if (i === 0) {
+          o1.frequency.setValueAtTime(freq * pitch, t);
+          o2.frequency.setValueAtTime(freq * 1.5 * pitch, t);
+        } else {
+          o1.frequency.exponentialRampToValueAtTime(freq * pitch, tm);
+          o2.frequency.exponentialRampToValueAtTime(freq * 1.5 * pitch, tm);
+        }
+      });
+      mix.gain.setValueAtTime(0.001, t);
+      mix.gain.linearRampToValueAtTime(spec.g, t + 0.02);
+      mix.gain.exponentialRampToValueAtTime(0.0008, t + spec.d + 0.01);
+      o1.start(t);
+      o2.start(t);
+      o1.stop(t + spec.d + 0.02);
+      o2.stop(t + spec.d + 0.02);
+      o1.onended = () => {
+        sub.disconnect();
+        mix.disconnect();
+      };
+    } catch {
+      /* ignore audio context errors */
+    }
+  }
 }
+
+const ROBOT_CHIRPS: Record<
+  "happy" | "curious" | "surprised" | "sad" | "annoyed" | "idle",
+  { a: OscillatorType; b: OscillatorType; f: number[]; d: number; g: number }
+> = {
+  happy: { a: "sine", b: "triangle", f: [540, 960, 1280], d: 0.22, g: 0.35 },
+  curious: { a: "sine", b: "sine", f: [480, 640, 920], d: 0.21, g: 0.30 },
+  surprised: { a: "triangle", b: "sine", f: [420, 1180], d: 0.15, g: 0.36 },
+  sad: { a: "sine", b: "sine", f: [460, 210], d: 0.30, g: 0.26 },
+  annoyed: { a: "sawtooth", b: "triangle", f: [205, 160], d: 0.20, g: 0.22 },
+  idle: { a: "sine", b: "sine", f: [580, 740], d: 0.10, g: 0.20 },
+};
 
 export const Sound = new SoundEngine();
