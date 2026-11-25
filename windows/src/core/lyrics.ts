@@ -129,6 +129,7 @@ class LyricsStore {
   loading = false;
 
   private activeKey: string | null = null;
+  private activeHasDuration = false;
   private cache = new Map<string, TrackLyrics | null>();
   private listeners = new Set<() => void>();
 
@@ -145,6 +146,7 @@ class LyricsStore {
     if (!track || isAd(track) || !track.title.trim()) {
       if (this.activeKey != null || this.current != null || this.loading) {
         this.activeKey = null;
+        this.activeHasDuration = false;
         this.current = null;
         this.loading = false;
         this.emit();
@@ -153,8 +155,12 @@ class LyricsStore {
     }
 
     const key = trackLyricsKey(track);
-    if (key === this.activeKey) return;
+    const hasDuration = track.duration > 0;
+    const isRetryWithDuration = key === this.activeKey && !this.activeHasDuration && hasDuration && !this.current?.synced;
+    if (key === this.activeKey && !isRetryWithDuration) return;
     this.activeKey = key;
+    this.activeHasDuration = hasDuration;
+    if (isRetryWithDuration) this.cache.delete(key);
 
     if (this.cache.has(key)) {
       this.current = this.cache.get(key) ?? null;

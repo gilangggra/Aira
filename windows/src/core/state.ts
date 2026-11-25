@@ -195,7 +195,31 @@ export interface Settings {
     onDesktop: boolean;
     spot: { x: number; y: number; space: string } | null;
   };
+  /** User-configurable EMO mascot eye & motion tuning (Settings → Appearance). */
+  mochiTune?: MochiTune;
 }
+
+export interface MochiTune {
+  eyeScale: number;
+  blinkRate: number;
+  drift: number;
+  overshoot: number;
+  sacThresh: number;
+  antic: number;
+  robotSound: boolean;
+  eyeColor: string;
+}
+
+export const DEFAULT_MOCHI_TUNE: MochiTune = {
+  eyeScale: 1.0,
+  blinkRate: 1.0,
+  drift: 1.0,
+  overshoot: 1.6,
+  sacThresh: 14,
+  antic: 9,
+  robotSound: true,
+  eyeColor: "",
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   soundEnabled: true,
@@ -232,6 +256,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mochiOutfit: DEFAULT_OUTFIT,
   pillColors: {},
   language: "",
+  mochiTune: { ...DEFAULT_MOCHI_TUNE },
 };
 
 type Listener = () => void;

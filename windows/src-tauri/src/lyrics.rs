@@ -26,6 +26,7 @@ pub struct LyricsPayload {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LrcLibRecord {
+    track_name: Option<String>,
     duration: Option<f64>,
     instrumental: Option<bool>,
     synced_lyrics: Option<String>,
@@ -101,8 +102,31 @@ fn build_search_url(title: &str, artist: &str) -> Result<Url, String> {
     Url::parse_with_params("https://lrclib.net/api/search", &params).map_err(|e| e.to_string())
 }
 
-fn pick_best_record(records: Vec<LrcLibRecord>, target_duration: f64) -> Option<LyricsPayload> {
-    let mut best: Option<(bool, f64, LrcLibRecord)> = None;
+fn has_variant_mismatch(rec_title: Option<&str>, query_title: &str) -> bool {
+    const VARIANTS: &[&str] = &[
+        "remix", "live", "sped up", "slowed", "reverb",
+        "acoustic", "cover", "karaoke", "nightcore", "8d",
+    ];
+    let Some(rt) = rec_title else { return false };
+    let r_low = rt.to_ascii_lowercase();
+    let q_low = query_title.to_ascii_lowercase();
+    VARIANTS.iter().any(|v| r_low.contains(v) && !q_low.contains(v))
+}
+
+fn title_matches(rec_title: Option<&str>, query_title: &str) -> bool {
+    let Some(rt) = rec_title else { return true };
+    let r_low = rt.trim().to_ascii_lowercase();
+    let q_low = query_title.trim().to_ascii_lowercase();
+    r_low == q_low || r_low.starts_with(&q_low) || q_low.starts_with(&r_low)
+}
+
+fn pick_best_record(
+    records: Vec<LrcLibRecord>,
+    target_duration: f64,
+    query_title: &str,
+) -> Option<LyricsPayload> {
+    // Score tuple: (has_synced, !variant_mismatch, title_matches, neg_diff)
+    let mut best: Option<((bool, bool, bool, f64), LrcLibRecord)> = None;
     for rec in records {
         if !rec.has_content() {
             continue;
@@ -116,20 +140,21 @@ fn pick_best_record(records: Vec<LrcLibRecord>, target_duration: f64) -> Option<
         } else {
             0.0
         };
-        if target_duration > 0.0 && diff > 10.0 && best.as_ref().is_some_and(|(_, bd, _)| *bd <= 10.0) {
+        if target_duration > 0.0 && diff > 12.0 && best.as_ref().is_some_and(|((_, _, _, nd), _)| -*nd <= 12.0) {
             continue;
         }
+        let clean_variant = !has_variant_mismatch(rec.track_name.as_deref(), query_title);
+        let exact_title = title_matches(rec.track_name.as_deref(), query_title);
+        let score = (has_synced, clean_variant, exact_title, -diff);
         let replace = match &best {
             None => true,
-            Some((best_synced, best_diff, _)) => {
-                (has_synced && !*best_synced) || (has_synced == *best_synced && diff < *best_diff)
-            }
+            Some((best_score, _)) => score > *best_score,
         };
         if replace {
-            best = Some((has_synced, diff, rec));
+            best = Some((score, rec));
         }
     }
-    best.map(|(_, _, rec)| rec.into_payload())
+    best.map(|(_, rec)| rec.into_payload())
 }
 
 async fn get_bytes(url: Url) -> Result<Option<Vec<u8>>, String> {
@@ -188,7 +213,7 @@ pub async fn spotify_lyrics(
     let payload = match get_bytes(search_url).await {
         Ok(Some(bytes)) => serde_json::from_slice::<Vec<LrcLibRecord>>(&bytes)
             .ok()
-            .and_then(|list| pick_best_record(list, duration)),
+            .and_then(|list| pick_best_record(list, duration, t)),
         _ => None,
     };
 
@@ -217,24 +242,47 @@ mod tests {
     #[test]
     fn pick_best_prefers_synced_and_closest_duration() {
         let plain_exact = LrcLibRecord {
+            track_name: Some("Hello".into()),
             duration: Some(200.0),
             instrumental: Some(false),
             synced_lyrics: None,
             plain_lyrics: Some("Hello plain".into()),
         };
         let synced_close = LrcLibRecord {
+            track_name: Some("Hello".into()),
             duration: Some(201.0),
             instrumental: Some(false),
             synced_lyrics: Some("[00:05.00] Hello synced".into()),
             plain_lyrics: Some("Hello synced".into()),
         };
         let synced_far = LrcLibRecord {
+            track_name: Some("Hello (Live)".into()),
             duration: Some(240.0),
             instrumental: Some(false),
             synced_lyrics: Some("[00:10.00] Wrong edit".into()),
             plain_lyrics: None,
         };
-        let chosen = pick_best_record(vec![plain_exact, synced_far, synced_close], 200.0).unwrap();
+        let chosen = pick_best_record(vec![plain_exact, synced_far, synced_close], 200.0, "Hello").unwrap();
         assert_eq!(chosen.synced_lyrics.as_deref(), Some("[00:05.00] Hello synced"));
+    }
+
+    #[test]
+    fn pick_best_avoids_remix_when_duration_is_unknown() {
+        let remix = LrcLibRecord {
+            track_name: Some("Midnight (Sped Up)".into()),
+            duration: Some(150.0),
+            instrumental: Some(false),
+            synced_lyrics: Some("[00:02.00] Fast".into()),
+            plain_lyrics: None,
+        };
+        let original = LrcLibRecord {
+            track_name: Some("Midnight".into()),
+            duration: Some(195.0),
+            instrumental: Some(false),
+            synced_lyrics: Some("[00:04.00] Normal".into()),
+            plain_lyrics: None,
+        };
+        let chosen = pick_best_record(vec![remix, original], 0.0, "Midnight").unwrap();
+        assert_eq!(chosen.synced_lyrics.as_deref(), Some("[00:04.00] Normal"));
     }
 }

@@ -7,8 +7,19 @@
 import { Ease, lerp, type EaseFn } from "../core/anim";
 import { Sound } from "../core/sound";
 import type { BotEmoteName, BotStateName } from "../core/layout";
+import { DEFAULT_MOCHI_TUNE, type MochiTune } from "../core/state";
 import { PUMPKIN_BODY, drawOutfitBehind, drawOutfitFront, makeHead } from "./outfits";
 import type { Outfit } from "./wardrobe";
+import {
+  EMO_EMOTE_PRESETS,
+  EMO_STATE_PRESETS,
+  drawEmoEye,
+  makeEmoSpring,
+  mirrorEmoEye,
+  stepEmoSpring,
+  type EmoEyeSpec,
+  type EmoSpring,
+} from "./emo-eyes";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -196,6 +207,10 @@ export function danceTransform(seconds: number, level: number, R: number) {
 
 export class BotEngine {
   isMini = false;
+  /** Desktop pet sets true so a sleek dark OLED visor backs the glowing eyes. */
+  showVisorBody = false;
+  /** User-configurable mascot eye & motion tuning. */
+  tune: MochiTune = { ...DEFAULT_MOCHI_TUNE };
   /** Solid body colour for mini bots / integration pills (null = Mochi gradient). */
   bodyColor: RGB | null = null;
   /**
@@ -203,6 +218,31 @@ export class BotEngine {
    * he wears the up-arrow badge. The island turns his body blue alongside.
    */
   private updateHint: RGB | null = null;
+
+  // EMO Glowing Eyes physics state
+  private emoSpringL: EmoSpring = makeEmoSpring(EMO_STATE_PRESETS.idle.L);
+  private emoSpringR: EmoSpring = makeEmoSpring(EMO_STATE_PRESETS.idle.R);
+  private emoTint: [number, number, number] = [...EMO_STATE_PRESETS.idle.tint];
+  private emoLookCurL = { x: 0, y: 0 };
+  private emoLookCurR = { x: 0, y: 0 };
+  private emoLookSmooth = { x: 0, y: 0 };
+  private emoLookVelX = 0;
+  private emoLastTgt = { x: 0, y: 0 };
+  private emoKick = { x: 0, y: 0, vx: 0, vy: 0 };
+  private emoBounce = 0;
+  private emoBounceVel = 0;
+  private emoPop = 0;
+  private emoPopVel = 0;
+  private emoAntic = 0;
+  private emoBreath = 0;
+  private emoBlinkL = 1;
+  private emoBlinkR = 1;
+  private emoBlinkingL = false;
+  private emoBlinkingR = false;
+  private emoAsymSide = 1;
+  private emoEmoteName: BotEmoteName | null = null;
+  private emoEmoteUntil = 0;
+  private emoBlinkTimers: ReturnType<typeof setTimeout>[] = [];
 
   // Animated state (BotEngine `s`)
   yaw = 0; pitch = 0; roll = 0; tilt = 0; open = 1;
@@ -287,6 +327,27 @@ export class BotEngine {
     if (!this.locks.has("tilt")) this.tgTilt = this.cfg.tilt;
     this.setBadge(this.stateBadge());
 
+    // EMO Eyes transition anticipation, pop & hybrid sound accent
+    const preset = EMO_STATE_PRESETS[next];
+    if (preset?.asym) {
+      this.emoAsymSide = this.state !== prev ? (Math.random() < 0.5 ? 1 : -1) : -this.emoAsymSide;
+    }
+    if (next !== prev) {
+      this.emoAntic = 1;
+      if (next !== "sleeping" && next !== "finished") {
+        this.emoPop = 0.16;
+        this.emoPopVel = 0;
+        this.emoBounceVel = -115;
+      } else if (next === "finished") {
+        this.emoBounceVel = -95;
+      }
+      if (next === "finished") Sound.playChirp("happy");
+      else if (next === "question" || next === "thinking") Sound.playChirp("curious");
+      else if (next === "error") Sound.playChirp("sad");
+      else if (next === "dizzy") Sound.playChirp("annoyed");
+      else if (next === "approval") Sound.playChirp("surprised");
+    }
+
     switch (next) {
       case "finished":
         this.doRoll(950, 1);
@@ -350,6 +411,14 @@ export class BotEngine {
   blink() {
     if (this.locks.has("open")) return;
     this.anim("open", [[0.06, 70, Ease.inOut], [1, 130, Ease.out]]);
+    if (this.state === "sleeping" || this.state === "finished") return;
+    while (this.emoBlinkTimers.length) clearTimeout(this.emoBlinkTimers.pop());
+    this.emoBlinkingR = true;
+    this.emoBlinkTimers.push(setTimeout(() => { this.emoBlinkingL = true; }, 22));
+    this.emoBlinkTimers.push(setTimeout(() => {
+      this.emoBlinkingR = false;
+      this.emoBlinkTimers.push(setTimeout(() => { this.emoBlinkingL = false; }, 22));
+    }, 85));
   }
 
   squash() {
@@ -383,10 +452,15 @@ export class BotEngine {
     this.physVx += Math.random() < 0.5 ? 0.7 : -0.7;
     if (this.slapTimes.length >= 3) {
       this.slapTimes = [];
+      Sound.playChirp("annoyed");
       this.onDizzy?.();
     } else {
       this.eyeOverride = "line";
       this.eyeOverrideUntil = t + 0.8;
+      this.emoEmoteName = "annoyed";
+      this.emoEmoteUntil = t + 0.9;
+      this.emoBounceVel = -160;
+      Sound.playChirp("surprised");
       setTimeout(() => Sound.play("annoyed"), 60);
     }
   }
@@ -406,6 +480,10 @@ export class BotEngine {
 
     this.eyeOverride = "happy";
     this.eyeOverrideUntil = t + 2.0;
+    this.emoEmoteName = "happy";
+    this.emoEmoteUntil = t + 2.0;
+    this.emoBounceVel = -95;
+    Sound.playChirp("happy");
     this.anim("oy", [[-0.06, 220, Ease.out], [0.0, 220, Ease.back]]);
 
     setTimeout(() => {
@@ -459,9 +537,13 @@ export class BotEngine {
     const t = now();
     this.eyeOverride = EMOTE_EYE[emote];
     this.eyeOverrideUntil = t + duration;
+    this.emoEmoteName = emote;
+    this.emoEmoteUntil = t + duration;
 
     switch (emote) {
       case "love":
+        Sound.playChirp("happy");
+        this.emoBounceVel = -90;
         this.anim("blush", [
           [1, 300, Ease.out], [1, (duration - 0.6) * 1000, Ease.lin], [0, 300, Ease.inOut],
         ]);
@@ -469,10 +551,14 @@ export class BotEngine {
         this.anim("oy", [[-0.1, 160, Ease.out], [0, 300, Ease.back]]);
         break;
       case "surprised":
+        Sound.playChirp("surprised");
+        this.emoPop = 0.18;
+        this.emoBounceVel = -160;
         this.anim("oy", [[-0.3, 140, Ease.out], [0, 380, Ease.back]]);
         this.anim("es", [[1.25, 120, Ease.out], [1, 500, Ease.inOut]]);
         break;
       case "proud":
+        Sound.playChirp("happy");
         this.emit("star", 5);
         this.anim("tilt", [
           [-0.14, 220, Ease.out], [-0.14, (duration - 0.5) * 1000, Ease.lin], [0, 280, Ease.inOut],
@@ -482,21 +568,29 @@ export class BotEngine {
         ]);
         break;
       case "wink":
+        Sound.playChirp("curious");
+        this.emoBlinkingR = true;
+        setTimeout(() => { this.emoBlinkingR = false; }, 280);
         this.anim("tilt", [
           [0.12, 160, Ease.out], [0.12, (duration - 0.4) * 1000, Ease.lin], [0, 240, Ease.inOut],
         ]);
         break;
       case "yawn":
+        Sound.playChirp("sad");
         this.anim("sy", [[1.12, 500, Ease.inOut], [1, 500, Ease.inOut]]);
         this.anim("sx", [[0.94, 500, Ease.inOut], [1, 500, Ease.inOut]]);
         setTimeout(() => { this.eyeOverride = "closed"; this.emit("z", 2); }, 700);
         break;
       case "happy":
+        Sound.playChirp("happy");
+        this.emoBounceVel = -90;
         this.anim("blush", [[0.6, 200, Ease.out], [0, 600, Ease.inOut]]);
         break;
       case "annoyed":
         this.eyeOverride = "line";
         this.eyeOverrideUntil = t + 0.8;
+        this.emoEmoteUntil = t + 0.8;
+        Sound.playChirp("annoyed");
         setTimeout(() => Sound.play("annoyed"), 60);
         break;
     }
@@ -563,6 +657,7 @@ export class BotEngine {
 
   /** True while anything is still moving — lets the island stop its RAF loop. */
   get busy(): boolean {
+    if (!this.isMini) return true;
     return (
       this.tweens.size > 0 ||
       this.particles.length > 0 ||
@@ -684,7 +779,8 @@ export class BotEngine {
         this.blink();
         if (Math.random() < 0.22) setTimeout(() => this.blink(), 230);
       }
-      this.nextBlink = n + 2.2 + Math.random() * 3.2;
+      const blinkMul = Math.max(0.4, this.tune.blinkRate || 1);
+      this.nextBlink = n + (2.2 + Math.random() * 3.2) / blinkMul;
     }
 
     if (this.eyeOverride && n > this.eyeOverrideUntil) {
@@ -729,7 +825,135 @@ export class BotEngine {
     this.prevOy = this.oy;
     this.prevRoll = this.roll;
 
+    if (!this.isMini) this.stepEmoPhysics(n, dt);
+
     this.lastTime = n;
+  }
+
+  private stepEmoPhysics(n: number, rawDt: number) {
+    const dt = Math.min(0.05, Math.max(0.001, rawDt));
+    const damp = (c: number, tg: number, l: number) => c + (tg - c) * (1 - Math.exp(-l * dt));
+    const t = (n - this.t0) * 1.8;
+
+    if (this.emoEmoteName && n > this.emoEmoteUntil) {
+      this.emoEmoteName = null;
+    }
+
+    // Active preset (emote overrides state temporarily, dancing in calm states smiles)
+    let preset = (this.emoEmoteName && EMO_EMOTE_PRESETS[this.emoEmoteName])
+      ? EMO_EMOTE_PRESETS[this.emoEmoteName]!
+      : EMO_STATE_PRESETS[this.state] ?? EMO_STATE_PRESETS.idle;
+
+    if (this.isDancing && this.dancingLevel > 0.15 && !this.emoEmoteName && (this.state === "idle" || this.state === "finished")) {
+      preset = EMO_STATE_PRESETS.finished;
+    }
+
+    const flip = Boolean(preset.asym && this.emoAsymSide === -1);
+    const tL: EmoEyeSpec = flip ? mirrorEmoEye(preset.R) : { ...preset.L };
+    const tR: EmoEyeSpec = flip ? mirrorEmoEye(preset.L) : { ...preset.R };
+
+    // Target gaze in fiks.html coordinates (-28..28, -16..16)
+    let tx = this.lookX * 26;
+    let ty = -this.lookY * 14;
+    if (this.cfg.look) {
+      tx = tx * 0.35 + this.cfg.look[0] * 24;
+      ty = ty * 0.3 + -this.cfg.look[1] * 14;
+    }
+    if (this.cfg.scans) {
+      tx = Math.sin(t * 1.45) * 24;
+      ty = Math.cos(t * 2.9) * 3;
+    }
+    if (this.state === "sleeping" || this.state === "finished" || this.state === "dizzy") {
+      tx = 0;
+      ty = 0;
+    }
+
+    // Saccade overshoot + subtle robotic servo sweep
+    const dLook = Math.hypot(tx - this.emoLastTgt.x, ty - this.emoLastTgt.y);
+    const sacThresh = this.tune.sacThresh ?? 14;
+    const overshoot = this.tune.overshoot ?? 1.6;
+    if (dLook > sacThresh && !this.cfg.scans) {
+      this.emoKick.vx += (tx - this.emoLastTgt.x) * overshoot;
+      this.emoKick.vy += (ty - this.emoLastTgt.y) * overshoot;
+      Sound.playServo(Math.min(1, dLook / 30));
+    }
+    this.emoLastTgt.x = tx;
+    this.emoLastTgt.y = ty;
+    this.emoKick.vx += (-140 * this.emoKick.x - 9 * this.emoKick.vx) * dt;
+    this.emoKick.vy += (-140 * this.emoKick.y - 9 * this.emoKick.vy) * dt;
+    this.emoKick.x += this.emoKick.vx * dt;
+    this.emoKick.y += this.emoKick.vy * dt;
+
+    // Continuous organic micro-drift so eyes never feel frozen
+    const driftAmp = (this.state === "sleeping" || this.state === "dizzy") ? 0 : (this.tune.drift ?? 1);
+    const driftX = (Math.sin(t * 0.7) * 1.1 + Math.sin(t * 1.9 + 2) * 0.5) * driftAmp;
+    const driftY = (Math.cos(t * 0.6) * 0.8 + Math.sin(t * 1.5) * 0.3) * driftAmp;
+
+    const gx = tx + driftX + this.emoKick.x;
+    const gy = ty + driftY + this.emoKick.y;
+    const prevRx = this.emoLookCurR.x;
+    const boost = Math.min(26, Math.hypot(gx - this.emoLookSmooth.x, gy - this.emoLookSmooth.y) * 1.4);
+    this.emoLookSmooth.x = damp(this.emoLookSmooth.x, gx, 18 + boost);
+    this.emoLookSmooth.y = damp(this.emoLookSmooth.y, gy, 18 + boost);
+    this.emoLookCurR.x = damp(this.emoLookCurR.x, this.emoLookSmooth.x, 22 + boost);
+    this.emoLookCurR.y = damp(this.emoLookCurR.y, this.emoLookSmooth.y, 22 + boost);
+    this.emoLookCurL.x = damp(this.emoLookCurL.x, this.emoLookSmooth.x, 17 + boost);
+    this.emoLookCurL.y = damp(this.emoLookCurL.y, this.emoLookSmooth.y, 17 + boost);
+    this.emoLookVelX = dt > 0 ? (this.emoLookCurR.x - prevRx) / dt : 0;
+
+    // Upward glance lifts bottom arch slightly
+    if (this.emoLookCurR.y < -5 && this.state !== "sleeping" && this.state !== "finished") {
+      const upLift = Math.min(7, (-this.emoLookCurR.y - 5) * 0.6);
+      tL.botArch += upLift;
+      tR.botArch += upLift;
+    }
+
+    if (this.state === "idle" && !this.emoEmoteName) {
+      tL.h += Math.sin(t * 0.37 + 1) * 2.2;
+      tR.h += Math.sin(t * 0.5) * 2.2;
+      tL.dy += Math.sin(t * 0.4) * 0.8;
+    }
+
+    this.emoAntic = damp(this.emoAntic, 0, 7);
+    const anticAmp = this.tune.antic ?? 9;
+    if (this.emoAntic > 0.02 && anticAmp > 0) {
+      for (const e of [tL, tR]) {
+        e.h -= this.emoAntic * anticAmp;
+        e.w += (this.emoAntic * anticAmp) / 3;
+      }
+    }
+
+    const spK = preset.stiffness ?? 155;
+    const spC = preset.damping ?? 16.5;
+    stepEmoSpring(this.emoSpringL, tL, dt, spK, spC);
+    stepEmoSpring(this.emoSpringR, tR, dt, spK, spC);
+
+    this.emoBounceVel += (-180 * this.emoBounce - 16 * this.emoBounceVel) * dt;
+    this.emoBounce += this.emoBounceVel * dt;
+    this.emoPopVel += (-220 * this.emoPop - 11 * this.emoPopVel) * dt;
+    this.emoPop += this.emoPopVel * dt;
+    this.emoBreath = Math.sin(t * 0.9) * 0.012 * (this.state === "sleeping" ? 1.8 : 1);
+
+    // Blinking: fast close (50), smooth open (17)
+    this.emoBlinkR = damp(this.emoBlinkR, this.emoBlinkingR ? 0.04 : 1, this.emoBlinkingR ? 50 : 17);
+    this.emoBlinkL = damp(this.emoBlinkL, this.emoBlinkingL ? 0.04 : 1, this.emoBlinkingL ? 50 : 17);
+
+    // Tint interpolation (custom eyeColor overrides default idle tint; bodyColor/updateHint blends)
+    const targetTint = [...preset.tint] as [number, number, number];
+    if (this.tune.eyeColor && /^#[0-9a-fA-F]{6}$/.test(this.tune.eyeColor)) {
+      const custom = hexToRGB(this.tune.eyeColor);
+      targetTint[0] = lerp(targetTint[0], custom[0] * 255, 0.85);
+      targetTint[1] = lerp(targetTint[1], custom[1] * 255, 0.85);
+      targetTint[2] = lerp(targetTint[2], custom[2] * 255, 0.85);
+    }
+    if (this.bodyColor) {
+      targetTint[0] = lerp(targetTint[0], this.bodyColor[0] * 255, 0.55);
+      targetTint[1] = lerp(targetTint[1], this.bodyColor[1] * 255, 0.55);
+      targetTint[2] = lerp(targetTint[2], this.bodyColor[2] * 255, 0.55);
+    }
+    for (let i = 0; i < 3; i++) {
+      this.emoTint[i] = damp(this.emoTint[i], targetTint[i], 6);
+    }
   }
 
   private doMiniBehaviorLoop() {
@@ -801,6 +1025,11 @@ export class BotEngine {
     const cx = W / 2 + this.ox * R;
     const cy = H / 2 + this.particleOverhang / 2 + this.oy * R + R * 0.06;
 
+    if (!this.isMini) {
+      this.drawEmoVisor(x, R, rx, ry, cx, cy);
+      return;
+    }
+
     // With an outfit on, a roll turns the whole character — hat included — as
     // one piece instead of rolling the eyes over the body (BotCanvasView, macOS).
     x.save();
@@ -843,6 +1072,111 @@ export class BotEngine {
     if (this.morph > 0.05) this.drawMouth(x, body, R);
 
     if (head) drawOutfitFront(x, this.outfit, head, outfitState);
+
+    x.restore();
+    x.restore();
+
+    if (this.badge && this.badgeS > 0.01 && this.morph < 0.25) {
+      this.drawBadge(x, this.badge, R, cx, cy);
+    }
+    this.drawParticles(x, R, cx, cy);
+  }
+
+  /**
+   * Renders the new EMO glowing eyes. In the Notch/Dynamic Island only the
+   * eyes are drawn on a transparent canvas (the island itself acts as head).
+   * In Desktop Mochi (`showVisorBody`), a dark OLED squircle backs the eyes.
+   */
+  private drawEmoVisor(
+    x: CanvasRenderingContext2D,
+    R: number, rx: number, ry: number, cx: number, cy: number,
+  ) {
+    const t = (now() - this.t0) * 1.8;
+    const fl = this.state === "finished" ? Math.sin(t * 3.2) * 2
+      : this.state === "sleeping" ? Math.sin(t * 0.85) * 0.8
+      : this.state === "idle" ? Math.sin(t * 1.1) * 1.2
+      : 0;
+
+    x.save();
+    x.translate(cx, cy);
+    if (this.tilt !== 0) x.rotate(this.tilt);
+    x.scale(this.sx, this.sy);
+
+    // Optional dark OLED visor body only when floating as Desktop Mochi
+    if (this.showVisorBody) {
+      const visorW = rx * 2.15;
+      const visorH = ry * 1.85;
+      const visorR = Math.min(visorW, visorH) * 0.36;
+      x.save();
+      x.fillStyle = "rgba(8, 11, 16, 0.94)";
+      x.strokeStyle = "rgba(255, 255, 255, 0.14)";
+      x.lineWidth = Math.max(1, R * 0.045);
+      x.shadowColor = "rgba(0, 0, 0, 0.45)";
+      x.shadowBlur = Math.max(2, R * 0.35);
+      x.beginPath();
+      x.roundRect(-visorW / 2, -visorH / 2, visorW, visorH, visorR);
+      x.fill();
+      x.shadowBlur = 0;
+      x.stroke();
+      x.restore();
+    }
+
+    // Proportional scale from prototype (440x240, eye gap=136) into Mochi R space
+    const eyeScale = Math.max(0.75, Math.min(1.35, this.tune.eyeScale ?? 1));
+    const scale = ((R * 1.15) / 68) * eyeScale;
+    const tiltAngle = this.showVisorBody ? this.emoLookCurR.x * 0.0022 : 0;
+    const converge = Math.abs(this.emoLookCurR.x) * 0.08;
+    const lx = (-68 + converge) * scale;
+    const rxPos = (68 - converge) * scale;
+    const ey = (fl - (this.morph > 0 ? 12 * this.morph : 0)) * scale;
+
+    x.save();
+    x.rotate(tiltAngle);
+
+    const common = {
+      y: ey,
+      scale,
+      lookVelX: this.emoLookVelX,
+      bounceOffset: this.emoBounce,
+      pop: this.emoPop,
+      cross: 0,
+      breath: this.emoBreath,
+      arousal: this.state === "approval" || this.state === "working" ? 0.4 : 0,
+      tint: this.emoTint,
+      t,
+      isDrowsy: this.state === "ratelimit" || this.state === "error",
+      isBrightBoost: this.state === "approval" || this.state === "question",
+    };
+
+    if (this.morph < 0.7) {
+      x.save();
+      if (this.morph > 0.05) x.globalAlpha = 1 - this.morph * 0.6;
+      drawEmoEye(x, {
+        ...common,
+        x: lx,
+        spring: this.emoSpringL,
+        isLeft: true,
+        lookX: this.emoLookCurL.x,
+        lookY: this.emoLookCurL.y,
+        blinkScale: this.emoBlinkL,
+      });
+      drawEmoEye(x, {
+        ...common,
+        x: rxPos,
+        spring: this.emoSpringR,
+        isLeft: false,
+        lookX: this.emoLookCurR.x,
+        lookY: this.emoLookCurR.y,
+        blinkScale: this.emoBlinkR,
+      });
+      x.restore();
+    }
+
+    // Preserve upload/drop slot morph if user drags a file over the island
+    if (this.morph > 0.05) {
+      const body = this.bodyPath(rx, ry, R);
+      this.drawMouth(x, body, R);
+    }
 
     x.restore();
     x.restore();

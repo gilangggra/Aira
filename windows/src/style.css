@@ -335,12 +335,9 @@ body {
   color: color-mix(in srgb, var(--plan) 70%, white);
 }
 
-#compact-plan .compact-plan-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--plan);
+#compact-plan .compact-plan-ring {
   flex-shrink: 0;
+  display: block;
 }
 
 /* Date and time in the middle of the compact island, positioned flexibly. */
@@ -4666,12 +4663,13 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 7px;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  max-width: 116px;
+  padding: 2px 6px 2px 5px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
   border-radius: 999px;
-  background: #0e0f11;
-  color: #fbbf24;
-  font: 600 10.5px var(--font);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.05));
+  color: #fde68a;
+  font: 500 10px var(--font);
   font-variant-numeric: tabular-nums;
   line-height: 1;
   cursor: pointer;
@@ -4680,16 +4678,36 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 #compact-agenda:hover {
-  background: rgba(245, 158, 11, 0.18);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.24), rgba(245, 158, 11, 0.1));
   border-color: rgba(245, 158, 11, 0.55);
-  color: #fde68a;
+  color: #fef3c7;
 }
 
-#compact-agenda .compact-agenda-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #f59e0b;
+#compact-agenda .compact-agenda-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+
+#compact-agenda .compact-agenda-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+#compact-agenda .compact-agenda-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5px 5px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fcd34d;
+  font: 600 9.5px var(--font);
+  line-height: 1;
   flex-shrink: 0;
 }
 
@@ -5726,18 +5744,18 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   opacity: 0.72;
 }
 
-#compact-airadoro .compact-airadoro-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #38bdf8;
-  box-shadow: 0 0 6px rgba(56, 189, 248, 0.85);
+#compact-airadoro .compact-airadoro-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #38bdf8;
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.55));
   flex-shrink: 0;
 }
 
-#compact-airadoro.rest .compact-airadoro-dot {
-  background: #22c55e;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.85);
+#compact-airadoro.rest .compact-airadoro-ico {
+  color: #22c55e;
+  filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.55));
 }
 
 .airadoro-progress-track {
@@ -7856,7 +7874,8 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 #compact-agenda {
-  border-color: rgba(245, 158, 11, 0.28);
+  border-color: rgba(245, 158, 11, 0.3);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.06));
 }
 
 #compact-airadoro {
@@ -7967,15 +7986,15 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 5px;
   height: 20px;
-  padding: 0 8px;
+  padding: 0 7px;
   border: 0;
   border-radius: 999px;
-  background: transparent;
+  background: rgba(29, 185, 84, 0.08);
   color: rgba(240, 253, 244, 0.92);
-  font: 500 11px/1 var(--font);
+  font: 500 10.5px/1 var(--font);
   cursor: pointer;
   opacity: 0;
   overflow: hidden;
