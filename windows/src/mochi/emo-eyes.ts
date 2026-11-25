@@ -85,8 +85,8 @@ export const EMO_STATE_PRESETS: Record<BotStateName, EmoPreset> = {
     tint: [220, 255, 238],
     stiffness: 170,
     damping: 20,
-    L: E(52, 52, 26, 12, 0, 4),
-    R: E(52, 52, 26, 12, 0, 4),
+    L: E(46, 52, 23, 12, 0, 2),
+    R: E(46, 52, 23, 12, 0, 2),
   },
   ratelimit: {
     tint: [255, 224, 195],
@@ -99,8 +99,8 @@ export const EMO_STATE_PRESETS: Record<BotStateName, EmoPreset> = {
     tint: [200, 208, 238],
     stiffness: 70,
     damping: 16,
-    L: E(52, 54, -10, -27, 0, -2),
-    R: E(52, 54, -10, -27, 0, -2),
+    L: E(46, 52, -12, -23, 0, 0),
+    R: E(46, 52, -12, -23, 0, 0),
   },
   dizzy: {
     tint: [245, 220, 245],
@@ -114,22 +114,22 @@ export const EMO_EMOTE_PRESETS: Partial<Record<BotEmoteName, EmoPreset>> = {
     tint: [255, 242, 226],
     stiffness: 170,
     damping: 20,
-    L: E(52, 52, 26, 12, 0, 4),
-    R: E(52, 52, 26, 12, 0, 4),
+    L: E(46, 52, 23, 12, 0, 2),
+    R: E(46, 52, 23, 12, 0, 2),
   },
   love: {
     tint: [255, 205, 225],
     stiffness: 180,
     damping: 18,
-    L: E(52, 52, 26, 12, 0, 4),
-    R: E(52, 52, 26, 12, 0, 4),
+    L: E(46, 52, 23, 12, 0, 2),
+    R: E(46, 52, 23, 12, 0, 2),
   },
   proud: {
     tint: [255, 240, 195],
     stiffness: 180,
     damping: 18,
-    L: E(52, 52, 26, 12, 0, 4),
-    R: E(52, 52, 26, 12, 0, 4),
+    L: E(46, 52, 23, 12, 0, 2),
+    R: E(46, 52, 23, 12, 0, 2),
   },
   surprised: {
     tint: [255, 255, 255],
@@ -147,8 +147,8 @@ export const EMO_EMOTE_PRESETS: Partial<Record<BotEmoteName, EmoPreset>> = {
     tint: [220, 226, 246],
     stiffness: 90,
     damping: 16,
-    L: E(52, 52, 26, 12, 0, 4),
-    R: E(52, 52, 26, 12, 0, 4),
+    L: E(46, 52, 23, 12, 0, 2),
+    R: E(46, 52, 23, 12, 0, 2),
   },
 };
 
@@ -273,20 +273,50 @@ export function drawEmoEye(ctx: CanvasRenderingContext2D, p: DrawEmoEyeParams) {
     c.save();
     c.scale(coreScale, coreScale);
 
-    // Outer glow
-    if (applyGlow) {
-      const gl = 1 + p.arousal * 0.35;
+    // Smoothly crossfade to a uniform-thickness glowing arc for happy/finished (⌒)
+    // and sleeping (◡) so its outer width matches the default eye width.
+    if (eyeDetail > 0.02) {
       c.save();
-      c.fillStyle = col();
-      c.shadowColor = col(0.6);
-      c.shadowBlur = Math.max(2, 16 * gl * scale);
-      traceEmoEye(c, w, h, ta, ba);
-      c.fill();
+      c.globalAlpha *= eyeDetail;
+      if (applyGlow) {
+        const gl = 1 + p.arousal * 0.35;
+        c.fillStyle = col();
+        c.shadowColor = col(0.6);
+        c.shadowBlur = Math.max(2, 16 * gl * scale);
+        traceEmoEye(c, w, h, ta, ba);
+        c.fill();
+      } else {
+        c.fillStyle = col();
+        traceEmoEye(c, w, h, ta, ba);
+        c.fill();
+      }
       c.restore();
-    } else {
-      c.fillStyle = col();
-      traceEmoEye(c, w, h, ta, ba);
-      c.fill();
+    }
+
+    if (crescentAmt > 0.02) {
+      const hw = w / 2;
+      const strokeW = Math.max(2, w * 0.19);
+      const spanX = Math.max(4, hw - strokeW * 0.5);
+      const isUpward = ba >= -ta;
+      const yEnd = isUpward ? hw * 0.36 : -hw * 0.28;
+      const yCtrl = isUpward ? -hw * 0.84 : hw * 0.76;
+
+      c.save();
+      c.globalAlpha *= crescentAmt;
+      c.strokeStyle = col();
+      c.lineWidth = strokeW;
+      c.lineCap = "round";
+      c.lineJoin = "round";
+      if (applyGlow) {
+        const gl = 1 + p.arousal * 0.35;
+        c.shadowColor = col(0.65);
+        c.shadowBlur = Math.max(2, 14 * gl * scale);
+      }
+      c.beginPath();
+      c.moveTo(-spanX, yEnd);
+      c.quadraticCurveTo(0, yCtrl, spanX, yEnd);
+      c.stroke();
+      c.restore();
     }
 
     // 3D dome gradient & specular glint (hidden smoothly in crescent modes)
