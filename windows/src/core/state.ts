@@ -132,6 +132,12 @@ export interface Settings {
   islandStyle?: string;
   /** Layout shape: "notch" (attached to top bezel, default) or "island" (floating Dynamic Island). */
   islandShape?: string;
+  /** Frosted glass tint percentage (10..100, default 50). */
+  glassTint?: number;
+  /** Show page icons in the bottom dock (false = dots until hovered). */
+  pageIcons?: boolean;
+  /** Island motion speed: "normal" (default) or "fast". */
+  animationSpeed?: string;
   absenceInterval: number;
   /** Declared pills next to the main one (at most 4), in the order they were added. */
   activeIntegrations: string[];
@@ -233,6 +239,9 @@ export const DEFAULT_SETTINGS: Settings = {
   islandScale: "normal",
   islandStyle: "glass",
   islandShape: "notch",
+  glassTint: 50,
+  pageIcons: true,
+  animationSpeed: "normal",
   absenceInterval: 180,
   activeIntegrations: [
     "integration_resend", "integration_n8n", "integration_vercel", "integration_github",

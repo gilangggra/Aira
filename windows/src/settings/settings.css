@@ -562,6 +562,175 @@ html[dir="rtl"] :is(.diff, .path, .keycap, input[type="password"], input[type="t
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
+/* ── Notch Style Visual Picker Cards ── */
+.notch-style-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 2px 0 12px;
+}
+
+.notch-style-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 8px 8px 10px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.notch-style-card:hover {
+  background: rgba(255, 255, 255, 0.075);
+}
+
+.notch-style-card.on {
+  border-color: #0a84ff;
+  background: rgba(10, 132, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(10, 132, 255, 0.25);
+}
+
+.notch-preview-screen {
+  position: relative;
+  height: 52px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #354173 0%, #44538d 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.notch-preview-pill {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 68%;
+  height: 17px;
+  background: #060709;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 9px;
+  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.notch-preview-pill.notch {
+  top: 0;
+  border-radius: 0 0 8px 8px;
+}
+
+.notch-preview-pill.slim {
+  top: 0;
+  width: 72%;
+  height: 5px;
+  padding: 0;
+  border-radius: 0 0 6px 6px;
+  background: #0a0c10;
+  box-shadow: 0 1px 6px rgba(52, 211, 153, 0.35);
+}
+
+.notch-preview-pill.island {
+  top: 6px;
+  border-radius: 999px;
+}
+
+.notch-preview-ring {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 1.8px solid #34d399;
+  box-shadow: 0 0 5px rgba(52, 211, 153, 0.55);
+}
+
+.notch-preview-time {
+  font: 600 8px/1 var(--font);
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.notch-style-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.notch-style-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.notch-style-title {
+  font: 600 12.5px/1.2 var(--font);
+  color: var(--ink);
+}
+
+.notch-style-check {
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: #0a84ff;
+  color: #ffffff;
+  font: 700 9.5px/1 var(--font);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.notch-style-card.on .notch-style-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.notch-style-desc {
+  font: 400 11px/1.3 var(--font);
+  color: var(--dim);
+}
+
+/* ── Glass Tint Stepper (- 50% +) ── */
+.tint-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tint-stepper-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  font: 600 14px/1 var(--font);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.tint-stepper-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.tint-stepper-val {
+  min-width: 38px;
+  text-align: center;
+  font: 600 12px/1 var(--font);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
 /* ── Preset Chips for Quick Intervals ── */
 .preset-chips {
   display: inline-flex;

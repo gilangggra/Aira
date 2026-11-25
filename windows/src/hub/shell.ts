@@ -175,7 +175,7 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
     if (renderer) {
       await renderer(page_, ctx);
     } else {
-      page_.append(hero(def.id, def.title(), def.subtitle?.() ?? null));
+      page_.append(h("h1", { class: "hub-page-title", text: def.title() }));
       const container = h("div", { id: "settings-root" });
       page_.append(container);
       await opts.renderNotch(def.id, container);
