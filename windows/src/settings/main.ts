@@ -1287,34 +1287,117 @@ function generalSections(): HTMLElement[] {
     },
   );
 
-  const styleCtrl = segmentedControl(
+  const isGlass = () => (settings.islandStyle || "glass") !== "solid";
+  const glassToggle = toggle(isGlass(), (v) => {
+    settings.islandStyle = v ? "glass" : "solid";
+    syncGlassTintState();
+    void save();
+  });
+
+  const clampTint = (n: number) => Math.max(10, Math.min(100, Math.round(n / 10) * 10));
+  const tintValueEl = h("span", { class: "tint-stepper-val", text: `${clampTint(settings.glassTint ?? 50)}%` });
+  const tintMinus = h("button", {
+    type: "button",
+    class: "tint-stepper-btn",
+    text: "−",
+    onclick: () => {
+      const next = clampTint((settings.glassTint ?? 50) - 10);
+      settings.glassTint = next;
+      tintValueEl.textContent = `${next}%`;
+      void save();
+    },
+  }) as HTMLButtonElement;
+  const tintPlus = h("button", {
+    type: "button",
+    class: "tint-stepper-btn",
+    text: "+",
+    onclick: () => {
+      const next = clampTint((settings.glassTint ?? 50) + 10);
+      settings.glassTint = next;
+      tintValueEl.textContent = `${next}%`;
+      void save();
+    },
+  }) as HTMLButtonElement;
+  const tintStepper = h("div", { class: "tint-stepper" }, tintMinus, tintValueEl, tintPlus);
+
+  const makeStylePreviewCard = (
+    kind: "notch" | "slim" | "island",
+    titleText: string,
+    descText: string,
+  ) => {
+    const pill =
+      kind === "slim"
+        ? h("div", { class: "notch-preview-pill slim" })
+        : h(
+            "div",
+            { class: `notch-preview-pill ${kind}` },
+            h("span", { class: "notch-preview-ring" }),
+            h("span", { class: "notch-preview-time", text: "10:08" }),
+          );
+    const screen = h("div", { class: "notch-preview-screen" }, pill);
+    const check = h("span", { class: "notch-style-check", text: "✓" });
+    const meta = h(
+      "div",
+      { class: "notch-style-meta" },
+      h("div", { class: "notch-style-title-row" }, h("span", { class: "notch-style-title", text: titleText }), check),
+      h("div", { class: "notch-style-desc", text: descText }),
+    );
+    const btn = h(
+      "button",
+      {
+        type: "button",
+        class: "notch-style-card",
+        onclick: () => {
+          settings.islandShape = kind;
+          syncStyleCards();
+          void save();
+        },
+      },
+      screen,
+      meta,
+    ) as HTMLButtonElement;
+    return btn;
+  };
+  const classicCard = makeStylePreviewCard("notch", t("Classic"), t("Joined to the top edge"));
+  const slimCard = makeStylePreviewCard("slim", t("Slim"), t("Thin bar at the top edge"));
+  const floatingCard = makeStylePreviewCard("island", t("Floating"), t("Floats just below the top edge"));
+  const syncStyleCards = () => {
+    const shape = settings.islandShape || "notch";
+    classicCard.classList.toggle("on", shape !== "slim" && shape !== "island");
+    slimCard.classList.toggle("on", shape === "slim");
+    floatingCard.classList.toggle("on", shape === "island");
+  };
+  syncStyleCards();
+  const styleCardsGrid = h("div", { class: "notch-style-grid" }, classicCard, slimCard, floatingCard);
+
+  const openNotchCtrl = segmentedControl(
     [
-      ["glass", t("Acrylic Glass")],
-      ["solid", t("OLED Black (Solid)")],
-      ["translucent", t("Translucent")],
+      ["hover", t("Hover")],
+      ["click", t("Click")],
     ],
-    settings.islandStyle || "glass",
+    settings.openOnHover ? "hover" : "click",
     (val) => {
-      settings.islandStyle = val;
+      settings.openOnHover = val === "hover";
       void save();
     },
   );
-
-  const shapeCtrl = segmentedControl(
+  const pageIconsToggle = toggle(settings.pageIcons !== false, (v) => {
+    settings.pageIcons = v;
+    void save();
+  });
+  const animSpeedCtrl = segmentedControl(
     [
-      ["notch", t("Top Notch")],
-      ["slim", t("Slim Notch")],
-      ["island", t("Dynamic Island")],
+      ["normal", t("Normal")],
+      ["fast", t("Fast")],
     ],
-    settings.islandShape || "notch",
+    settings.animationSpeed === "fast" ? "fast" : "normal",
     (val) => {
-      settings.islandShape = val;
+      settings.animationSpeed = val;
       void save();
     },
   );
 
   const sound = toggle(settings.soundEnabled, (v) => { settings.soundEnabled = v; void save(); });
-  const openOnHover = toggle(settings.openOnHover, (v) => { settings.openOnHover = v; void save(); });
   const autostart = toggle(settings.autostart, (v) => { settings.autostart = v; void save(); });
 
   const ensureTune = (): MochiTune => {
@@ -1396,14 +1479,29 @@ function generalSections(): HTMLElement[] {
     },
   });
 
+  let glassTintRow!: HTMLElement;
+  const syncGlassTintState = () => {
+    const on = isGlass();
+    if (glassTintRow) {
+      glassTintRow.style.opacity = on ? "1" : "0.45";
+      glassTintRow.style.pointerEvents = on ? "auto" : "none";
+    }
+    tintMinus.disabled = !on;
+    tintPlus.disabled = !on;
+  };
+
   generalSync = () => {
     setSwitch(sound, settings.soundEnabled);
-    setSwitch(openOnHover, settings.openOnHover);
     setSwitch(autostart, settings.autostart);
     positionCtrl.setValue(settings.islandPosition || "top");
     scaleCtrl.setValue(settings.islandScale || "normal");
-    styleCtrl.setValue(settings.islandStyle || "glass");
-    shapeCtrl.setValue(settings.islandShape || "notch");
+    syncStyleCards();
+    setSwitch(glassToggle, isGlass());
+    tintValueEl.textContent = `${clampTint(settings.glassTint ?? 50)}%`;
+    syncGlassTintState();
+    openNotchCtrl.setValue(settings.openOnHover ? "hover" : "click");
+    setSwitch(pageIconsToggle, settings.pageIcons !== false);
+    animSpeedCtrl.setValue(settings.animationSpeed === "fast" ? "fast" : "normal");
     setSwitch(robotSound, ensureTune().robotSound);
     syncColorBtns();
     for (const sl of tuneSliders) {
@@ -1429,18 +1527,23 @@ function generalSections(): HTMLElement[] {
   const card = (heading: string, ...items: HTMLElement[]) =>
     h("section", {}, h("h2", {}, h("span", { text: heading })), h("div", { class: "setting-list" }, ...items));
 
-  const generalCard = card(
-    t("General"),
-    languageRow(),
-    settingItem(t("Launch at startup"), null, autostart),
+  glassTintRow = settingItem(t("Glass tint"), null, tintStepper);
+  syncGlassTintState();
+
+  const notchStyleCard = card(
+    t("Notch style"),
+    styleCardsGrid,
+    settingItem(t("Glass"), t("Frosted glass behind the open notch"), glassToggle),
+    glassTintRow,
   );
 
-  const behaviorCard = card(
-    t("Behavior"),
+  const notchCard = card(
+    t("Notch"),
+    settingItem(t("Open the notch"), null, openNotchCtrl.element),
     settingItem(
-      t("Open on hover"),
-      t("Hovering the island opens it; it folds again shortly after the pointer leaves. Click inside to keep it open."),
-      openOnHover,
+      t("Page icons"),
+      t("Show page icons when you hover the page dots"),
+      pageIconsToggle,
     ),
     settingItem(
       t("Open for every pill’s alerts"),
@@ -1455,6 +1558,17 @@ function generalSections(): HTMLElement[] {
     ),
   );
 
+  const motionCard = card(
+    t("Motion"),
+    settingItem(t("Animation speed"), null, animSpeedCtrl.element),
+  );
+
+  const generalCard = card(
+    t("General"),
+    languageRow(),
+    settingItem(t("Launch at startup"), null, autostart),
+  );
+
   const displayCard = card(
     t("Display"),
     settingItem(t("Island lives on"), null, screen),
@@ -1467,16 +1581,6 @@ function generalSections(): HTMLElement[] {
       t("Island scale"),
       t("The size of the island."),
       scaleCtrl.element,
-    ),
-    settingItem(
-      t("Visual style"),
-      t("Background appearance and glass blur effect."),
-      styleCtrl.element,
-    ),
-    settingItem(
-      t("Island shape"),
-      t("Attach to the top screen bezel like a notch, or float as a Dynamic Island capsule."),
-      shapeCtrl.element,
     ),
     settingItem(
       t("Closed island shows"),
@@ -1516,7 +1620,7 @@ function generalSections(): HTMLElement[] {
   const recapCard = card(t("Weekly recap"), ...recapRows());
   const updatesCard = card(t("Updates"), ...updateRows(toggle, version));
 
-  return [generalCard, behaviorCard, displayCard, mascotCard, soundCard, recapCard, updatesCard];
+  return [notchStyleCard, notchCard, motionCard, generalCard, displayCard, mascotCard, soundCard, recapCard, updatesCard];
 }
 
 /**

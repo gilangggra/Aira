@@ -417,6 +417,254 @@ pub async fn converter_install_tool(app: AppHandle, tool: String) -> Result<(), 
     }
 }
 
+#[cfg(windows)]
+fn to_wide_null(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+/// Extracts a standard Windows Installer `{GUID}` product code from an UninstallString.
+pub fn extract_msi_product_code(input: &str) -> Option<String> {
+    let start = input.find('{')?;
+    let rest = &input[start..];
+    let end = rest.find('}')?;
+    let candidate = &rest[..=end];
+    let inner = &candidate[1..candidate.len() - 1];
+    let parts: Vec<&str> = inner.split('-').collect();
+    if parts.len() == 5
+        && parts[0].len() == 8
+        && parts[1].len() == 4
+        && parts[2].len() == 4
+        && parts[3].len() == 4
+        && parts[4].len() == 12
+        && parts.iter().all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
+    {
+        Some(candidate.to_string())
+    } else {
+        None
+    }
+}
+
+#[cfg(windows)]
+enum ElevatedOutcome {
+    Exited(u32),
+    Cancelled,
+    Failed(String),
+}
+
+#[cfg(windows)]
+fn run_elevated_sync(file: &str, args: &str, timeout: Duration) -> ElevatedOutcome {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED, RPC_E_CHANGED_MODE, WAIT_OBJECT_0, WAIT_TIMEOUT};
+    use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+    use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
+    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+
+    let verb = to_wide_null("runas");
+    let file_w = to_wide_null(file);
+    let args_w = to_wide_null(args);
+
+    unsafe {
+        let com = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        if com.is_err() && com != RPC_E_CHANGED_MODE {
+            return ElevatedOutcome::Failed("COM initialization failed.".into());
+        }
+
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI,
+            lpVerb: PCWSTR(verb.as_ptr()),
+            lpFile: PCWSTR(file_w.as_ptr()),
+            lpParameters: PCWSTR(args_w.as_ptr()),
+            nShow: SW_HIDE.0,
+            ..Default::default()
+        };
+
+        let ok = ShellExecuteExW(&mut info).is_ok();
+        if !ok {
+            let err = GetLastError();
+            if com.is_ok() {
+                CoUninitialize();
+            }
+            if err == ERROR_CANCELLED {
+                return ElevatedOutcome::Cancelled;
+            }
+            return ElevatedOutcome::Failed(format!("ShellExecuteExW failed ({})", err.0));
+        }
+
+        let outcome = if info.hProcess.is_invalid() {
+            ElevatedOutcome::Exited(0)
+        } else {
+            let wait_ms = timeout.as_millis().min(u32::MAX as u128) as u32;
+            let wait = WaitForSingleObject(info.hProcess, wait_ms);
+            let res = if wait == WAIT_OBJECT_0 {
+                let mut code = 0u32;
+                let _ = GetExitCodeProcess(info.hProcess, &mut code);
+                ElevatedOutcome::Exited(code)
+            } else if wait == WAIT_TIMEOUT {
+                ElevatedOutcome::Failed("uninstall timed out.".into())
+            } else {
+                ElevatedOutcome::Failed("wait failed.".into())
+            };
+            let _ = CloseHandle(info.hProcess);
+            res
+        };
+
+        if com.is_ok() {
+            CoUninitialize();
+        }
+        outcome
+    }
+}
+
+#[cfg(windows)]
+fn read_reg_string(hkey: windows::Win32::System::Registry::HKEY, name: &str) -> Option<String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::System::Registry::{RegQueryValueExW, REG_SZ, REG_VALUE_TYPE};
+
+    let name_w = to_wide_null(name);
+    let mut ty = REG_VALUE_TYPE(0);
+    let mut len = 0u32;
+    let status = unsafe { RegQueryValueExW(hkey, PCWSTR(name_w.as_ptr()), None, Some(&mut ty), None, Some(&mut len)) };
+    if status.is_err() || len < 2 || ty != REG_SZ {
+        return None;
+    }
+    let mut buf = vec![0u16; (len as usize) / 2 + 1];
+    let mut byte_len = (buf.len() * 2) as u32;
+    let status = unsafe {
+        RegQueryValueExW(
+            hkey,
+            PCWSTR(name_w.as_ptr()),
+            None,
+            Some(&mut ty),
+            Some(buf.as_mut_ptr() as *mut u8),
+            Some(&mut byte_len),
+        )
+    };
+    if status.is_err() {
+        return None;
+    }
+    let slice_len = (byte_len as usize / 2).min(buf.len());
+    let end = buf[..slice_len].iter().position(|&c| c == 0).unwrap_or(slice_len);
+    Some(String::from_utf16_lossy(&buf[..end]))
+}
+
+#[cfg(windows)]
+fn find_msi_product_code(engine: ConverterEngine) -> Option<String> {
+    use windows::core::{PCWSTR, PWSTR};
+    use windows::Win32::Foundation::ERROR_NO_MORE_ITEMS;
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
+        KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY,
+    };
+
+    let needle = match engine {
+        ConverterEngine::Libreoffice => "libreoffice",
+        ConverterEngine::Pandoc => "pandoc",
+        ConverterEngine::Ffmpeg => "ffmpeg",
+    };
+
+    let roots = [
+        (HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", KEY_READ | KEY_WOW64_64KEY),
+        (HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", KEY_READ | KEY_WOW64_32KEY),
+        (HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", KEY_READ),
+    ];
+
+    for (root, path, sam) in roots {
+        let path_w = to_wide_null(path);
+        let mut parent = HKEY::default();
+        if unsafe { RegOpenKeyExW(root, PCWSTR(path_w.as_ptr()), Some(0), sam, &mut parent) }.is_err() {
+            continue;
+        }
+        let mut index = 0u32;
+        loop {
+            let mut name_buf = [0u16; 256];
+            let mut name_len = name_buf.len() as u32;
+            let status = unsafe {
+                RegEnumKeyExW(
+                    parent,
+                    index,
+                    Some(PWSTR(name_buf.as_mut_ptr())),
+                    &mut name_len,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+            };
+            index += 1;
+            if status == ERROR_NO_MORE_ITEMS {
+                break;
+            }
+            if status.is_err() {
+                continue;
+            }
+            let sub_name = String::from_utf16_lossy(&name_buf[..name_len as usize]);
+            let sub_w = to_wide_null(&sub_name);
+            let mut sub_key = HKEY::default();
+            if unsafe { RegOpenKeyExW(parent, PCWSTR(sub_w.as_ptr()), Some(0), sam, &mut sub_key) }.is_err() {
+                continue;
+            }
+            let display = read_reg_string(sub_key, "DisplayName").unwrap_or_default();
+            let result = if display.to_ascii_lowercase().contains(needle) {
+                read_reg_string(sub_key, "UninstallString")
+                    .and_then(|s| extract_msi_product_code(&s))
+                    .or_else(|| extract_msi_product_code(&sub_name))
+            } else {
+                None
+            };
+            unsafe {
+                let _ = RegCloseKey(sub_key);
+            }
+            if result.is_some() {
+                unsafe {
+                    let _ = RegCloseKey(parent);
+                }
+                return result;
+            }
+        }
+        unsafe {
+            let _ = RegCloseKey(parent);
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+async fn winget_has_package(package_id: &str) -> bool {
+    let Some(winget) = platform::find_on_path("winget") else {
+        return false;
+    };
+    let mut std_cmd = std::process::Command::new(winget);
+    std_cmd
+        .args(["list", "--id", package_id, "--exact", "--accept-source-agreements"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    platform::no_console(&mut std_cmd);
+
+    let mut cmd = tokio::process::Command::from(std_cmd);
+    cmd.kill_on_drop(true);
+    let Ok(child) = cmd.spawn() else {
+        return false;
+    };
+    let Ok(Ok(output)) = tokio::time::timeout(Duration::from_secs(20), child.wait_with_output()).await else {
+        return false;
+    };
+    output.status.success()
+}
+
+async fn wait_for_tool_removal(engine: ConverterEngine, max_wait: Duration) -> Option<PathBuf> {
+    let deadline = tokio::time::Instant::now() + max_wait;
+    loop {
+        let found = find_tool(engine);
+        if found.is_none() || tokio::time::Instant::now() >= deadline {
+            return found;
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
 async fn run_uninstall(engine: ConverterEngine) -> Result<(), String> {
     remove_managed_dir(&tools_dir(), engine.id())?;
     if engine == ConverterEngine::Libreoffice {
@@ -424,10 +672,64 @@ async fn run_uninstall(engine: ConverterEngine) -> Result<(), String> {
     }
 
     #[cfg(windows)]
-    if engine == ConverterEngine::Libreoffice || find_tool(engine).is_some() {
+    if find_tool(engine).is_some() {
         let pkg = winget_package_id(engine);
-        if let Err(err) = run_winget("uninstall", pkg).await {
-            log::line(format!("converter-uninstall: winget uninstall {pkg} note: {err}"));
+        if winget_has_package(pkg).await {
+            if let Err(err) = run_winget("uninstall", pkg).await {
+                log::line(format!("converter-uninstall: winget uninstall {pkg} note: {err}"));
+            }
+            if wait_for_tool_removal(engine, Duration::from_secs(3)).await.is_some() {
+                if let Some(winget_path) = platform::find_on_path("winget") {
+                    let winget_str = winget_path.to_string_lossy().to_string();
+                    let args = format!("uninstall --id {pkg} --exact --silent --accept-source-agreements");
+                    let outcome = tokio::task::spawn_blocking(move || {
+                        run_elevated_sync(&winget_str, &args, WINGET_TIMEOUT)
+                    })
+                    .await
+                    .map_err(|e| e.to_string())?;
+                    match outcome {
+                        ElevatedOutcome::Cancelled => {
+                            return Err(i18n::tf(
+                                "Administrator permission is required to uninstall {tool}.",
+                                &[("tool", engine.display_name())],
+                            ));
+                        }
+                        ElevatedOutcome::Failed(err) => {
+                            log::line(format!("converter-uninstall: elevated winget {pkg} note: {err}"));
+                        }
+                        ElevatedOutcome::Exited(code) => {
+                            log::line(format!("converter-uninstall: elevated winget {pkg} exited with {code}"));
+                        }
+                    }
+                    let _ = wait_for_tool_removal(engine, Duration::from_secs(3)).await;
+                }
+            }
+        }
+
+        if find_tool(engine).is_some() {
+            if let Some(guid) = find_msi_product_code(engine) {
+                let args = format!("/x {guid} /passive /norestart");
+                let outcome = tokio::task::spawn_blocking(move || {
+                    run_elevated_sync("msiexec.exe", &args, WINGET_TIMEOUT)
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+                match outcome {
+                    ElevatedOutcome::Cancelled => {
+                        return Err(i18n::tf(
+                            "Administrator permission is required to uninstall {tool}.",
+                            &[("tool", engine.display_name())],
+                        ));
+                    }
+                    ElevatedOutcome::Failed(err) => {
+                        log::line(format!("converter-uninstall: msiexec {guid} note: {err}"));
+                    }
+                    ElevatedOutcome::Exited(code) => {
+                        log::line(format!("converter-uninstall: msiexec {guid} exited with {code}"));
+                    }
+                }
+                let _ = wait_for_tool_removal(engine, Duration::from_secs(3)).await;
+            }
         }
     }
 
@@ -565,5 +867,19 @@ mod tests {
         assert!(!ffmpeg_dir.exists());
         assert!(!root.exists());
         assert!(!remove_managed_dir(&root, "ffmpeg").unwrap());
+    }
+
+    #[test]
+    fn extracts_valid_msi_product_code_only() {
+        assert_eq!(
+            extract_msi_product_code("MsiExec.exe /I{12345678-ABCD-1234-EF00-1234567890AB}").as_deref(),
+            Some("{12345678-ABCD-1234-EF00-1234567890AB}")
+        );
+        assert_eq!(
+            extract_msi_product_code("{a1b2c3d4-e5f6-7890-abcd-ef1234567890}").as_deref(),
+            Some("{a1b2c3d4-e5f6-7890-abcd-ef1234567890}")
+        );
+        assert_eq!(extract_msi_product_code("C:\\Program Files\\Tool\\unins000.exe"), None);
+        assert_eq!(extract_msi_product_code("{not-a-valid-guid}"), None);
     }
 }

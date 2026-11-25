@@ -250,6 +250,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
     dockEl,
     sync() {
       const v = State.view;
+      dockEl.dataset.pageIcons = State.settings.pageIcons === false ? "off" : "on";
       const now = new Date();
       const dateStr = now.toLocaleDateString(language(), {
         weekday: "short",

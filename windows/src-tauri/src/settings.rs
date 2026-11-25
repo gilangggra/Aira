@@ -125,6 +125,12 @@ pub struct Settings {
     pub island_style: String,
     /// Shape of the island: "notch" (default, attached to top bezel) or "island" (floating Dynamic Island capsule).
     pub island_shape: String,
+    /// Frosted glass tint opacity percentage (10..=100, default 50).
+    pub glass_tint: f64,
+    /// Show page icons in the bottom dock (or reveal on hover when off).
+    pub page_icons: bool,
+    /// Island spring/curve animation speed: "normal" (default) or "fast".
+    pub animation_speed: String,
     /// Settings → Agents → Antigravity → Approve commands from the notch: a shell command
     /// none of Antigravity's rules covers waits for Allow / Deny on the island
     /// (agy_approvals.rs). Off by default; owned by the Rust side like `phone_link`, so
@@ -236,6 +242,9 @@ impl Default for Settings {
             island_scale: "normal".into(),
             island_style: "glass".into(),
             island_shape: "notch".into(),
+            glass_tint: 50.0,
+            page_icons: true,
+            animation_speed: "normal".into(),
             agy_approvals_enabled: false,
             mochi_tune: MochiTune::default(),
         }
@@ -545,6 +554,9 @@ mod tests {
   "islandScale": "normal",
   "islandStyle": "solid",
   "islandShape": "island",
+  "glassTint": 70.0,
+  "pageIcons": false,
+  "animationSpeed": "fast",
   "agyApprovalsEnabled": true,
   "mochiTune": {
     "eyeScale": 1.15,
@@ -1092,6 +1104,9 @@ mod tests {
                 "islandScale",
                 "islandStyle",
                 "islandShape",
+                "glassTint",
+                "pageIcons",
+                "animationSpeed",
                 "agyApprovalsEnabled",
                 "mochiTune",
             ]

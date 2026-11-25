@@ -1318,14 +1318,18 @@ export class Island {
 
   private animateGeometry(shrinking: boolean) {
     const { w, h, r } = this.targetSize();
+    const fast = State.settings.animationSpeed === "fast";
     if (shrinking) {
-      this.width.curveTowards(w);
-      this.height.curveTowards(h);
-      this.radius.curveTowards(r);
+      const dur = fast ? 190 : 340;
+      this.width.curveTowards(w, dur);
+      this.height.curveTowards(h, dur);
+      this.radius.curveTowards(r, dur);
     } else {
-      this.width.springTo(w);
-      this.height.springTo(h);
-      this.radius.springTo(r);
+      const resp = fast ? 0.28 : 0.5;
+      const damp = fast ? 0.78 : 0.72;
+      this.width.springTo(w, resp, damp);
+      this.height.springTo(h, resp, damp);
+      this.radius.springTo(r, resp, damp);
     }
     this.ensureRunning();
   }
@@ -1969,6 +1973,10 @@ export class Island {
   private syncDom() {
     this.islandEl.dataset.style = State.settings.islandStyle || "glass";
     this.islandEl.dataset.shape = State.settings.islandShape || "notch";
+    const tintPct = Math.max(10, Math.min(100, Number(State.settings.glassTint ?? 50)));
+    const tintAlpha = 0.45 + (tintPct / 100) * 0.5;
+    this.islandEl.style.setProperty("--glass-tint", tintAlpha.toFixed(3));
+    this.islandEl.style.setProperty("--glass-tint-bot", Math.min(0.98, tintAlpha + 0.04).toFixed(3));
     this.islandEl.dataset.bar = State.mode === "hidden" && this.isSlimShape ? "on" : "off";
     this.fsm.petitToHiddenDelay = this.isSlimShape ? 1.5 : 60;
     const expanded = State.mode === "expanded";
@@ -2216,6 +2224,10 @@ export class Island {
   applySettings() {
     this.islandEl.dataset.style = State.settings.islandStyle || "glass";
     this.islandEl.dataset.shape = State.settings.islandShape || "notch";
+    const tintPct = Math.max(10, Math.min(100, Number(State.settings.glassTint ?? 50)));
+    const tintAlpha = 0.45 + (tintPct / 100) * 0.5;
+    this.islandEl.style.setProperty("--glass-tint", tintAlpha.toFixed(3));
+    this.islandEl.style.setProperty("--glass-tint-bot", Math.min(0.98, tintAlpha + 0.04).toFixed(3));
     this.islandEl.dataset.bar = State.mode === "hidden" && this.isSlimShape ? "on" : "off";
     this.fsm.petitToHiddenDelay = this.isSlimShape ? 1.5 : 60;
     // The closed island may have changed: what it shows, or whether it shows.

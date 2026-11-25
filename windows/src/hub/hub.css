@@ -361,6 +361,10 @@ body.hub-window {
 
 /* The band's black and its colour, painted by the page too: the canvas draws
    the same over it, with the particles, once its frames run. */
+.hub-page-title {
+  display: none;
+}
+
 .hub-hero,
 .hub-glow {
   background:

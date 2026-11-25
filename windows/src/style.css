@@ -85,8 +85,8 @@ body {
 }
 
 #island[data-style="glass"] {
-  --island-bg: linear-gradient(180deg, rgba(28, 31, 38, 0.9) 0%, rgba(16, 18, 22, 0.94) 100%);
-  --island-ear: rgba(28, 31, 38, 0.9);
+  --island-bg: linear-gradient(180deg, rgba(28, 31, 38, var(--glass-tint, 0.9)) 0%, rgba(16, 18, 22, var(--glass-tint-bot, 0.94)) 100%);
+  --island-ear: rgba(28, 31, 38, var(--glass-tint, 0.9));
   backdrop-filter: blur(28px) saturate(185%);
   -webkit-backdrop-filter: blur(28px) saturate(185%);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -7237,6 +7237,24 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 .dock-tab.on .dock-lbl {
   max-width: 72px;
   opacity: 1;
+}
+
+#dock[data-page-icons="off"] .dock-tabs:not(:hover) .dock-tab:not(.on) {
+  padding: 0 5px;
+}
+
+#dock[data-page-icons="off"] .dock-tabs:not(:hover) .dock-tab:not(.on) .dock-ico {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.36);
+}
+
+#dock[data-page-icons="off"] .dock-tabs:not(:hover) .dock-tab:not(.on) .dock-ico svg {
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
 .dock-tab.tab-agenda .tab-dot {
