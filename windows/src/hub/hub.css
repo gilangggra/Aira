@@ -344,7 +344,8 @@ body.hub-window {
 }
 
 .hub-page {
-  max-width: 1100px;
+  max-width: 780px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -362,7 +363,14 @@ body.hub-window {
 /* The band's black and its colour, painted by the page too: the canvas draws
    the same over it, with the particles, once its frames run. */
 .hub-page-title {
-  display: none;
+  font: 600 20px/1.25 var(--font);
+  letter-spacing: -0.015em;
+  color: var(--hub-text);
+  margin: 0 0 2px;
+}
+
+.hub-hero {
+  display: none !important;
 }
 
 .hub-hero,
@@ -450,7 +458,7 @@ body.hub-window {
   background: var(--hub-card);
   border: 1px solid var(--hub-line);
   border-radius: 14px;
-  padding: 18px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -461,6 +469,14 @@ body.hub-window {
   align-items: center;
   gap: 14px;
   min-height: 30px;
+  margin: 0 -8px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+
+.hub-row:hover {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .hub-row .text {
@@ -1119,6 +1135,46 @@ button.hub-icon svg {
   }
   .hub-hero .copy {
     max-width: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .hub-side {
+    width: 196px;
+    flex: 0 0 196px;
+    padding: 14px 10px 10px;
+  }
+  .hub-panel {
+    margin: 8px 8px 8px 0;
+    border-radius: 16px;
+  }
+  .hub-scroll {
+    padding: 18px 20px 24px;
+  }
+  .hub-page {
+    max-width: 100%;
+    gap: 14px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .hub-side {
+    width: 248px;
+    flex: 0 0 248px;
+    padding: 20px 14px 14px;
+  }
+  .hub-scroll {
+    padding: 28px 40px 36px;
+  }
+  .hub-page {
+    max-width: 940px;
+    gap: 20px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .hub-page {
+    max-width: 1040px;
   }
 }
 

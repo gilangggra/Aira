@@ -779,7 +779,21 @@ export class Island {
     State.notify();
   }
 
+  private allowedView(view: IslandViewName): IslandViewName {
+    if (view === "music" && State.settings.compactMusic === false) return "overview";
+    if (view === "agenda" && State.settings.compactAgenda === false) return "overview";
+    if (view === "weather" && State.settings.compactWeather === false) return "overview";
+    if (view === "upload" && State.settings.featureUpload === false) return "overview";
+    if (view === "prompt" && State.settings.featureChat === false) return "overview";
+    if (view === "launch" && State.settings.featureAgents === false) return "overview";
+    if (view === "clipboard" && State.settings.featureClipboard === false) return "overview";
+    if (view === "mail" && State.settings.featureMail === false) return "overview";
+    if (view === "convert" && State.settings.featureConvert === false) return "overview";
+    return view;
+  }
+
   expand(view: IslandViewName) {
+    view = this.allowedView(view);
     this.stopSequenceIfLeaving(view);
     if (view !== "overview") closePlanCard();
     State.view = view;
@@ -790,6 +804,7 @@ export class Island {
   }
 
   setView(view: IslandViewName) {
+    view = this.allowedView(view);
     this.stopSequenceIfLeaving(view);
     if (view !== "overview") closePlanCard();
     if (State.mode !== "expanded") {
@@ -848,6 +863,7 @@ export class Island {
 
   /** Music started playing: the compact island, without the peek sound (musicReveal). */
   revealSilently() {
+    if (State.settings.compactMusic === false) return;
     this.silentReveal = true;
     this.fsm.reveal();
     this.silentReveal = false;
@@ -1180,13 +1196,13 @@ export class Island {
     const gap = 6;
     const otherCount = 0; // Mini-grid (mochi on the right) hidden per user request
     const hasWeather = false; // Weather pill on compact notch hidden per user request
-    const musicLabel = State.mode === "compact" ? this.currentCompactMusicLabel() : null;
+    const musicLabel = State.mode === "compact" && State.settings.compactMusic !== false ? this.currentCompactMusicLabel() : null;
     const hasLyric = Boolean(musicLabel);
     const hasClock = State.settings.showClock && !hasLyric;
-    const hasAiradoro = Airadoro.snapshot.phase !== "idle";
-    const pendingToday = pendingCountForDate(loadAgendaTasks(), dayKey(new Date()));
+    const hasAiradoro = State.settings.compactAiradoro !== false && Airadoro.snapshot.phase !== "idle";
+    const pendingToday = State.settings.compactAgenda !== false ? pendingCountForDate(loadAgendaTasks(), dayKey(new Date())) : 0;
     const hasAgenda = pendingToday > 0;
-    const hasPlan = claudeCompactPillVisible();
+    const hasPlan = State.settings.compactPlan !== false && claudeCompactPillVisible();
     const hasAnyInfo = hasPlan || hasAgenda || hasAiradoro || hasClock || hasLyric || hasWeather || otherCount > 0;
 
     const gridW = otherCount === 0 ? 0 : otherCount === 1 ? 16 : 30;
@@ -2045,6 +2061,12 @@ export class Island {
     // A wardrobe try-on never outlives the wardrobe.
     if (State.wardrobePreview && !(expanded && State.view === "wardrobe")) State.wardrobePreview = null;
 
+    // Enforce disabled notch features: leave disabled views and close disabled overlays.
+    const nextAllowed = this.allowedView(State.view);
+    if (State.view !== nextAllowed) State.view = nextAllowed;
+    if (State.settings.compactPlan === false && planCardOpen()) closePlanCard();
+    if (State.settings.compactAiradoro === false && Airadoro.snapshot.phase !== "idle") Airadoro.stop();
+
     this.header.sync();
     for (const [name, view] of this.views) {
       const on = name === State.view;
@@ -2072,7 +2094,7 @@ export class Island {
     this.miniGrid.style.pointerEvents = "none";
 
     // Compact Claude plan indicator
-    const showPlan = claudeCompactPillVisible();
+    const showPlan = State.settings.compactPlan !== false && claudeCompactPillVisible();
     this.compactPlan.style.opacity = showPlan ? "1" : "0";
     this.compactPlan.style.pointerEvents = showPlan ? "auto" : "none";
     if (showPlan) {
@@ -2087,7 +2109,7 @@ export class Island {
 
     // Compact Airadoro live focus countdown pill
     const airaSnap = Airadoro.snapshot;
-    const showAiradoro = State.mode === "compact" && airaSnap.phase !== "idle";
+    const showAiradoro = State.mode === "compact" && State.settings.compactAiradoro !== false && airaSnap.phase !== "idle";
     this.compactAiradoro.style.opacity = showAiradoro ? "1" : "0";
     this.compactAiradoro.style.pointerEvents = showAiradoro ? "auto" : "none";
     this.compactAiradoro.classList.toggle("rest", airaSnap.phase === "rest");
@@ -2114,9 +2136,9 @@ export class Island {
     }
 
     // Compact agenda pending tasks indicator
-    const todayPending = tasksForDay(loadAgendaTasks(), dayKey(new Date())).filter((t) => !t.completed);
+    const todayPending = State.settings.compactAgenda !== false ? tasksForDay(loadAgendaTasks(), dayKey(new Date())).filter((t) => !t.completed) : [];
     const pendingToday = todayPending.length;
-    const showAgenda = State.mode === "compact" && pendingToday > 0;
+    const showAgenda = State.mode === "compact" && State.settings.compactAgenda !== false && pendingToday > 0;
     this.compactAgenda.style.opacity = showAgenda ? "1" : "0";
     this.compactAgenda.style.pointerEvents = showAgenda ? "auto" : "none";
     if (showAgenda) {
@@ -2161,7 +2183,7 @@ export class Island {
   }
 
   private syncCompactLyric() {
-    const label = State.mode === "compact" ? this.currentCompactMusicLabel() : null;
+    const label = State.mode === "compact" && State.settings.compactMusic !== false ? this.currentCompactMusicLabel() : null;
     const on = Boolean(label);
     this.compactLyric.style.opacity = on ? "1" : "0";
     this.compactLyric.style.pointerEvents = on ? "auto" : "none";

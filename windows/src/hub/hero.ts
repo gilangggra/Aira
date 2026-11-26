@@ -467,34 +467,16 @@ export const THEMES: Record<string, Theme> = {
 };
 
 /** The band itself: title, line, actions, and the Mochis. */
-export function hero(page: string, title: string, subtitle: string | null, actions: HTMLElement[] = [], compact = false): HTMLElement {
-  const theme = THEMES[page] ?? THEMES.general;
+export function hero(_page: string, _title: string, _subtitle: string | null, actions: HTMLElement[] = [], _compact = false): HTMLElement {
   const el = document.createElement("div");
-  el.className = compact ? "hub-hero compact" : "hub-hero";
-  el.style.setProperty("--hero-line", rgba(theme.color, 0.16));
-  el.style.setProperty("--hero-glow", rgba(theme.color, 0.3));
-  el.style.setProperty("--hero-tint", rgba(theme.color, 0.1));
-  const back = document.createElement("canvas");
-  back.className = "backdrop";
-  const copy = document.createElement("div");
-  copy.className = "copy";
-  const h1 = document.createElement("h1");
-  h1.textContent = title;
-  copy.append(h1);
-  if (subtitle) {
-    const p = document.createElement("p");
-    p.textContent = subtitle;
-    copy.append(p);
+  if (!actions.length) {
+    el.className = "hub-hero";
+    el.style.display = "none";
+    return el;
   }
-  if (actions.length) {
-    const row = document.createElement("div");
-    row.className = "actions";
-    row.append(...actions);
-    copy.append(row);
-  }
-  el.append(back, copy);
-  backdrop(back, theme.color, el);
-  void troupe;
+  el.className = "hub-hero-actions-only";
+  el.style.cssText = "display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; gap: 8px;";
+  el.append(...actions);
   return el;
 }
 

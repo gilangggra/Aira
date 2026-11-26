@@ -17,10 +17,8 @@ export interface WhatsAppSettingsHost {
   toggle: Toggle;
   /** Whether the WhatsApp pill is among the active ones. */
   pillActive(): boolean;
-  /** Turns the pill on (when a slot is free) or off, and saves. */
+  /** Turns the pill on or off, and saves. */
   setPill(on: boolean): void;
-  /** How many pills may be active. */
-  maxPills: number;
 }
 
 const hintStyle = (color: string) => `color:${color}`;
@@ -262,9 +260,6 @@ export function whatsappSection(host: WhatsAppSettingsHost): HTMLElement {
     body.style.display = v.prefs.enabled ? "" : "none";
 
     const parts: HTMLElement[] = [];
-    if (v.prefs.enabled && !host.pillActive()) {
-      parts.push(h("div", { class: "hint", style: hintStyle("#F4505E"), text: t("Turn off another pill to make room for WhatsApp ({max} at most).", { max: host.maxPills }) }));
-    }
     // One click: Coucou downloads GOWA, checks it and starts it. No command line.
     if (v.prefs.gateway === "gowa") parts.push(...installBlock(v));
     if (showsLinkState(v)) parts.push(...linkState(v));

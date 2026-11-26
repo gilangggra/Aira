@@ -15,10 +15,12 @@ import { closedIsland } from "../core/closed";
 import type { UpdateStatus } from "../core/update";
 import { SOUND_NAMES } from "../core/sound";
 import {
-  MAX_DECLARED, PILL_CATEGORIES, availablePills, chooseMainPill, isComingSoon, mainPillChoices,
+  PILL_CATEGORIES, availablePills, chooseMainPill, isComingSoon, mainPillChoices,
   sanitizeDeclared, toggleDeclared, type PillDefinition,
 } from "../core/pills";
-import { h, clear } from "../views/dom";
+import { h, clear, svg } from "../views/dom";
+import { ICONS } from "../views/icons";
+import { buildMiniWeatherIcon } from "../views/weather-art";
 import { startHub, type PageId } from "../hub/shell";
 import { FLOW_PAGE_RENDERERS } from "../hub/pages";
 import { claudeModelControl } from "./claude-models";
@@ -420,15 +422,15 @@ function planSection(status: HookStatus): HTMLElement {
         h("span", { class: "hint", text: status.planRelayInstalled ? t("installed") : t("not installed") }),
         status.planRelayInstalled
           ? h("button", {
-              class: "danger",
-              text: t("Uninstall relay…"),
-              onclick: () => void reviewChange(body, STATUS_LINE_CHANGE, false, redraw, () => void rebuild()),
-            })
+            class: "danger",
+            text: t("Uninstall relay…"),
+            onclick: () => void reviewChange(body, STATUS_LINE_CHANGE, false, redraw, () => void rebuild()),
+          })
           : h("button", {
-              class: "primary",
-              text: t("Install relay…"),
-              onclick: () => void reviewChange(body, STATUS_LINE_CHANGE, true, redraw, () => void rebuild()),
-            }),
+            class: "primary",
+            text: t("Install relay…"),
+            onclick: () => void reviewChange(body, STATUS_LINE_CHANGE, true, redraw, () => void rebuild()),
+          }),
       ),
       // Codex: nothing to install, Coucou asks the Codex CLI when the pill shows.
       h("div", { class: "hint", text: PLAN_SETTINGS_TEXT.codex }),
@@ -464,37 +466,37 @@ function subscriptionsSection(): HTMLElement {
     preserveScroll(list, () => {
       clear(list);
       for (const row of rows) {
-      const p = providerDef(row.provider);
-      const sw = toggle(row.on, (on) => {
-        void Bridge.subscriptionSet(row.provider, on).then((next) => {
-          if (next) draw(next);
+        const p = providerDef(row.provider);
+        const sw = toggle(row.on, (on) => {
+          void Bridge.subscriptionSet(row.provider, on).then((next) => {
+            if (next) draw(next);
+          });
         });
-      });
-      const info = h("div", { class: "setting-info" },
-        h("div", { class: "setting-title" },
-          h("i", { class: "dot", style: `background:${p.accent}` }),
-          h("span", { text: SUBSCRIPTION_NAMES[row.provider] ?? p.name }),
-        ),
-      );
-      if (row.installed) {
-        info.append(
-          h("div", { class: "setting-desc", style: "color:#22c55e", text: t("{tool} found ✓", { tool: row.tool }) }),
-          h("div", {
-            class: "setting-desc",
-            text: t("Not signed in yet? Run this once in a terminal: {command}", { command: row.signIn }),
-          }),
+        const info = h("div", { class: "setting-info" },
+          h("div", { class: "setting-title" },
+            h("i", { class: "dot", style: `background:${p.accent}` }),
+            h("span", { text: SUBSCRIPTION_NAMES[row.provider] ?? p.name }),
+          ),
         );
-      } else {
-        info.append(h("div", { class: "setting-desc", text: t("{tool} not found.", { tool: row.tool }) }));
+        if (row.installed) {
+          info.append(
+            h("div", { class: "setting-desc", style: "color:#22c55e", text: t("{tool} found ✓", { tool: row.tool }) }),
+            h("div", {
+              class: "setting-desc",
+              text: t("Not signed in yet? Run this once in a terminal: {command}", { command: row.signIn }),
+            }),
+          );
+        } else {
+          info.append(h("div", { class: "setting-desc", text: t("{tool} not found.", { tool: row.tool }) }));
+        }
+        if (!row.subscriptionOnly && !row.on) {
+          info.append(h("div", { class: "setting-desc", text: t("Off: the chat uses your API key below.") }));
+        }
+        const controls: HTMLElement[] = row.installed
+          ? [sw]
+          : [h("button", { text: t("Install it"), onclick: () => void Bridge.openUrl(row.installUrl) }), sw];
+        list.append(h("div", { class: "setting-item" }, info, h("div", { class: "setting-control" }, ...controls)));
       }
-      if (!row.subscriptionOnly && !row.on) {
-        info.append(h("div", { class: "setting-desc", text: t("Off: the chat uses your API key below.") }));
-      }
-      const controls: HTMLElement[] = row.installed
-        ? [sw]
-        : [h("button", { text: t("Install it"), onclick: () => void Bridge.openUrl(row.installUrl) }), sw];
-      list.append(h("div", { class: "setting-item" }, info, h("div", { class: "setting-control" }, ...controls)));
-    }
     });
   };
   void Bridge.subscriptionStatus().then((rows) => draw(rows ?? []));
@@ -660,8 +662,7 @@ function activePillsSection(connected: Record<string, boolean>): HTMLElement {
   function row(def: PillDefinition): HTMLElement {
     const isMain = def.id === settings.mainPill;
     const on = settings.activeIntegrations.includes(def.id);
-    const full = !isMain && !on && settings.activeIntegrations.length >= MAX_ACTIVE;
-    const el = h("div", { class: full ? "pill-row full" : "pill-row" },
+    const el = h("div", { class: "pill-row" },
       colorDot(def, "width:10px;height:10px", () => settings.pillColors, pickColor),
       h("span", { class: "name", text: def.name }),
     );
@@ -672,7 +673,6 @@ function activePillsSection(connected: Record<string, boolean>): HTMLElement {
     const why = hint(def);
     el.append(h("span", { class: "state", text: why ?? "" }));
     const sw = h("button", { class: on ? "switch on" : "switch" }) as HTMLButtonElement;
-    sw.disabled = full;
     sw.addEventListener("click", () => {
       const next = toggleDeclared(settings, def.id);
       if (!next) return;
@@ -689,8 +689,8 @@ function activePillsSection(connected: Record<string, boolean>): HTMLElement {
   function draw() {
     preserveScroll(groups, () => {
       const used = settings.activeIntegrations.length;
-      slots.textContent = t("{used}/{max} slots in use — the main tool doesn't take one.", { used, max: MAX_ACTIVE });
-      slots.classList.toggle("full", used >= MAX_ACTIVE);
+      slots.textContent = t("{count} active — the main tool stays active.", { count: used });
+      slots.classList.remove("full");
       main.value = settings.mainPill;
       clear(groups);
       for (const cat of PILL_CATEGORIES) {
@@ -893,7 +893,7 @@ function localSection(customKey: boolean): HTMLElement {
         settings[field] = "";
         if (settings.chatProvider === id) settings.chatProvider = "anthropic";
         if (id === "custom") {
-          await Bridge.secretClear(CUSTOM_SERVER_KEY).catch(() => {});
+          await Bridge.secretClear(CUSTOM_SERVER_KEY).catch(() => { });
           customKey = false;
         }
         await save();
@@ -990,40 +990,56 @@ interface IntegrationDef {
 }
 
 const INTEGRATIONS: IntegrationDef[] = [
-  { id: "integration_stripe", name: "Stripe", color: "#0570DE",
-    fields: [{ key: "stripe-api-key", label: N_("Secret key"), placeholder: "sk_live_…", secret: true }] },
-  { id: "integration_github", name: "GitHub", color: "#F4505E",
+  {
+    id: "integration_stripe", name: "Stripe", color: "#0570DE",
+    fields: [{ key: "stripe-api-key", label: N_("Secret key"), placeholder: "sk_live_…", secret: true }]
+  },
+  {
+    id: "integration_github", name: "GitHub", color: "#F4505E",
     fields: [{ key: "github-token", label: N_("Token"), placeholder: "ghp_…", secret: true }],
-    hint: N_("Classic token with the repo scope, or fine-grained with read access to Pull requests, Commit statuses and Actions.") },
-  { id: "integration_gitlab", name: "GitLab", color: "#FC6D26",
+    hint: N_("Classic token with the repo scope, or fine-grained with read access to Pull requests, Commit statuses and Actions.")
+  },
+  {
+    id: "integration_gitlab", name: "GitLab", color: "#FC6D26",
     fields: [
       { key: "gitlab-url", label: N_("Instance URL"), placeholder: "https://gitlab.com", secret: false },
       { key: "gitlab-token", label: N_("Token"), placeholder: "glpat-…", secret: true },
     ],
-    hint: N_("Personal access token with read_api and read_user scopes.") },
-  { id: "integration_gitea", name: "Gitea", color: "#609926",
+    hint: N_("Personal access token with read_api and read_user scopes.")
+  },
+  {
+    id: "integration_gitea", name: "Gitea", color: "#609926",
     fields: [
       { key: "gitea-url", label: N_("Instance URL"), placeholder: "https://gitea.example.com", secret: false },
       { key: "gitea-token", label: N_("Token"), placeholder: "…", secret: true },
-    ] },
-  { id: "integration_vercel", name: "Vercel", color: "#7C5CFF",
-    fields: [{ key: "vercel-token", label: N_("Token"), placeholder: "…", secret: true }] },
-  { id: "integration_n8n", name: "n8n", color: "#F29B38",
+    ]
+  },
+  {
+    id: "integration_vercel", name: "Vercel", color: "#7C5CFF",
+    fields: [{ key: "vercel-token", label: N_("Token"), placeholder: "…", secret: true }]
+  },
+  {
+    id: "integration_n8n", name: "n8n", color: "#F29B38",
     fields: [
       { key: "n8n-url", label: N_("Instance URL"), placeholder: "https://n8n.example.com", secret: false },
       { key: "n8n-api-key", label: N_("API key"), placeholder: "…", secret: true },
-    ] },
-  { id: "integration_resend", name: "Resend", color: "#22C55E",
-    fields: [{ key: "resend-api-key", label: N_("API key"), placeholder: "re_…", secret: true }] },
-  { id: "integration_notion", name: "Notion", color: "#8C8C8C",
-    fields: [{ key: "notion-api-key", label: N_("Integration token"), placeholder: "ntn_…", secret: true }] },
-  { id: "integration_calcom", name: "Cal.com", color: "#C9956A",
-    fields: [{ key: "calcom-api-key", label: N_("API key"), placeholder: "cal_…", secret: true }] },
+    ]
+  },
+  {
+    id: "integration_resend", name: "Resend", color: "#22C55E",
+    fields: [{ key: "resend-api-key", label: N_("API key"), placeholder: "re_…", secret: true }]
+  },
+  {
+    id: "integration_notion", name: "Notion", color: "#8C8C8C",
+    fields: [{ key: "notion-api-key", label: N_("Integration token"), placeholder: "ntn_…", secret: true }]
+  },
+  {
+    id: "integration_calcom", name: "Cal.com", color: "#C9956A",
+    fields: [{ key: "calcom-api-key", label: N_("API key"), placeholder: "cal_…", secret: true }]
+  },
   // Nothing to enter: Spotify is read from the OS (src-tauri/src/spotify.rs).
   { id: "integration_spotify", name: "Spotify", color: "#1DB954", fields: [] },
 ];
-
-const MAX_ACTIVE = MAX_DECLARED;
 
 /** Everything that shows the declared pills, redrawn when any of them changes. */
 const declaredViews: (() => void)[] = [];
@@ -1039,7 +1055,7 @@ function integrationsSection(present: Record<string, boolean>): HTMLElement {
 
   function updateNote() {
     const used = settings.activeIntegrations.length;
-    note.textContent = t("Pick up to {max} pills to show next to Mochi — {used}/{max} in use. Keys are stored in the {store}, never on disk.", { max: MAX_ACTIVE, used, store: KEY_STORE });
+    note.textContent = t("{count} active. Keys are stored in the {store}, never on disk.", { count: used, store: KEY_STORE });
   }
   declaredViews.push(updateNote);
 
@@ -1052,7 +1068,6 @@ function integrationsSection(present: Record<string, boolean>): HTMLElement {
       if (on) {
         settings.activeIntegrations = settings.activeIntegrations.filter((x) => x !== def.id);
       } else {
-        if (settings.activeIntegrations.length >= MAX_ACTIVE) return;
         settings.activeIntegrations = [...settings.activeIntegrations, def.id];
       }
       sw.classList.toggle("on", !on);
@@ -1121,11 +1136,10 @@ function whatsappSections(): HTMLElement[] {
   if (!availablePills().some((p) => p.id === WHATSAPP_ID)) return [];
   return [whatsappSection({
     toggle,
-    maxPills: MAX_ACTIVE,
     pillActive: () => settings.activeIntegrations.includes(WHATSAPP_ID),
     setPill: (on) => {
       const has = settings.activeIntegrations.includes(WHATSAPP_ID);
-      if (on && !has && settings.activeIntegrations.length < MAX_ACTIVE) {
+      if (on && !has) {
         settings.activeIntegrations = [...settings.activeIntegrations, WHATSAPP_ID];
       } else if (!on && has) {
         settings.activeIntegrations = settings.activeIntegrations.filter((x) => x !== WHATSAPP_ID);
@@ -1325,15 +1339,16 @@ function generalSections(): HTMLElement[] {
     titleText: string,
     descText: string,
   ) => {
+    const eyes = h(
+      "span",
+      { class: "notch-preview-eyes" },
+      h("span", { class: "notch-preview-eye" }),
+      h("span", { class: "notch-preview-eye" }),
+    );
     const pill =
       kind === "slim"
         ? h("div", { class: "notch-preview-pill slim" })
-        : h(
-            "div",
-            { class: `notch-preview-pill ${kind}` },
-            h("span", { class: "notch-preview-ring" }),
-            h("span", { class: "notch-preview-time", text: "10:08" }),
-          );
+        : h("div", { class: `notch-preview-pill ${kind}` }, eyes);
     const screen = h("div", { class: "notch-preview-screen" }, pill);
     const check = h("span", { class: "notch-style-check", text: "✓" });
     const meta = h(
@@ -1496,6 +1511,7 @@ function generalSections(): HTMLElement[] {
     positionCtrl.setValue(settings.islandPosition || "top");
     scaleCtrl.setValue(settings.islandScale || "normal");
     syncStyleCards();
+    syncInfoCards();
     setSwitch(glassToggle, isGlass());
     tintValueEl.textContent = `${clampTint(settings.glassTint ?? 50)}%`;
     syncGlassTintState();
@@ -1530,11 +1546,401 @@ function generalSections(): HTMLElement[] {
   glassTintRow = settingItem(t("Glass tint"), null, tintStepper);
   syncGlassTintState();
 
-  const notchStyleCard = card(
-    t("Notch style"),
-    styleCardsGrid,
-    settingItem(t("Glass"), t("Frosted glass behind the open notch"), glassToggle),
-    glassTintRow,
+  const resetNotchBtn = h("button", {
+    type: "button",
+    class: "section-reset-btn",
+    text: t("Reset to defaults"),
+    onclick: () => {
+      settings.islandShape = "notch";
+      settings.islandStyle = "glass";
+      settings.glassTint = 50;
+      settings.openOnHover = false;
+      settings.pageIcons = true;
+      settings.alertsFromAllPills = false;
+      settings.autoCloseInterval = 15;
+      settings.animationSpeed = "normal";
+      settings.islandPosition = "top";
+      settings.islandScale = "normal";
+      settings.showClock = false;
+      settings.closedIsland = "mochi";
+      settings.compactMusic = true;
+      settings.compactAgenda = true;
+      settings.compactAiradoro = true;
+      settings.compactPlan = true;
+      settings.compactWeather = true;
+      generalSync?.();
+      void save();
+    },
+  });
+
+  const notchStyleCard = h(
+    "section",
+    {},
+    h("h2", {}, h("span", { text: t("Notch style") }), h("span", { class: "spacer" }), resetNotchBtn),
+    h(
+      "div",
+      { class: "setting-list" },
+      styleCardsGrid,
+      settingItem(t("Glass"), t("Frosted glass behind the open notch"), glassToggle),
+      glassTintRow,
+    ),
+  );
+
+  type CompactInfoKey =
+    | "compactMusic"
+    | "compactAgenda"
+    | "compactAiradoro"
+    | "compactPlan"
+    | "compactWeather"
+    | "featureUpload"
+    | "featureChat"
+    | "featureAgents"
+    | "featureClipboard"
+    | "featureMail"
+    | "featureConvert";
+  const makeInfoPreviewCard = (
+    key: CompactInfoKey,
+    titleText: string,
+    previewEl: HTMLElement,
+  ) => {
+    const badge = h("span", { class: "notch-info-check", text: "✓" });
+    const screen = h("div", { class: "notch-info-screen" }, previewEl, badge);
+    const labelEl = h("div", { class: "notch-info-title", text: titleText });
+    const btn = h(
+      "button",
+      {
+        type: "button",
+        class: "notch-info-card",
+        onclick: () => {
+          settings[key] = settings[key] === false;
+          syncInfoCards();
+          void save();
+        },
+      },
+      screen,
+      labelEl,
+    ) as HTMLButtonElement;
+    return { key, btn };
+  };
+
+  function miniPin(): SVGSVGElement {
+    const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    el.setAttribute("viewBox", "0 0 16 16");
+    el.setAttribute("width", "9");
+    el.setAttribute("height", "9");
+    el.setAttribute("fill", "none");
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML =
+      '<path d="M8 1.5a4.25 4.25 0 0 0-4.25 4.25c0 3.05 4.25 8.75 4.25 8.75s4.25-5.7 4.25-8.75A4.25 4.25 0 0 0 8 1.5Z" stroke="currentColor" stroke-width="1.5"/>' +
+      '<circle cx="8" cy="5.75" r="1.4" fill="currentColor"/>';
+    return el;
+  }
+
+  const infoCards = [
+    makeInfoPreviewCard(
+      "compactWeather",
+      t("Weather"),
+      h(
+        "div",
+        { class: "ni-card-body ni-weather" },
+        h(
+          "div",
+          { class: "ni-head" },
+          miniPin(),
+          h("span", { class: "ni-head-title", text: "Bojongsoang" }),
+          h("span", { class: "ni-pill sky", text: t("Drizzle") }),
+        ),
+        h(
+          "div",
+          { class: "ni-w-row" },
+          h(
+            "div",
+            { class: "ni-w-main" },
+            h("span", { class: "ni-big-num", text: "28°" }),
+            buildMiniWeatherIcon("rain", true, 16),
+          ),
+          h(
+            "div",
+            { class: "ni-w-hours" },
+            h(
+              "div",
+              { class: "ni-w-hr on" },
+              h("span", { class: "ni-hr-lbl", text: t("Now") }),
+              h("span", { class: "ni-hr-t", text: "29°" }),
+            ),
+            h(
+              "div",
+              { class: "ni-w-hr" },
+              h("span", { class: "ni-hr-lbl", text: "14" }),
+              h("span", { class: "ni-hr-t", text: "27°" }),
+            ),
+            h(
+              "div",
+              { class: "ni-w-hr" },
+              h("span", { class: "ni-hr-lbl", text: "15" }),
+              h("span", { class: "ni-hr-t", text: "26°" }),
+            ),
+          ),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "compactMusic",
+      t("Music & Lyrics"),
+      h(
+        "div",
+        { class: "ni-card-body ni-music" },
+        h(
+          "div",
+          { class: "ni-head" },
+          h("span", { class: "ni-dot green" }),
+          h("span", { class: "ni-head-title", text: "Dancing in the dark" }),
+          h("span", { class: "ni-pill green", text: t("Lyrics") }),
+        ),
+        h(
+          "div",
+          { class: "ni-m-mid" },
+          h("div", { class: "ni-m-art" }, svg(ICONS.musicNote, 12)),
+          h(
+            "div",
+            { class: "ni-m-meta" },
+            h("div", { class: "ni-m-artist", text: "Bruce Springsteen" }),
+            h("div", { class: "ni-m-lyric", text: "♪ Can't start a fire…" }),
+          ),
+        ),
+        h(
+          "div",
+          { class: "ni-prog-bar" },
+          h("div", { class: "ni-prog-fill green", style: "width: 52%" }),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "compactAgenda",
+      t("Agenda"),
+      h(
+        "div",
+        { class: "ni-card-body ni-agenda" },
+        h(
+          "div",
+          { class: "ni-head" },
+          h("span", { class: "ni-dot amber" }),
+          h("span", { class: "ni-head-title", text: t("Today") }),
+          h("span", { class: "ni-pill amber", text: "2" }),
+        ),
+        h(
+          "div",
+          { class: "ni-ag-list" },
+          h(
+            "div",
+            { class: "ni-ag-item" },
+            h("span", { class: "ni-ag-chk amber" }),
+            h("span", { class: "ni-ag-time", text: "09:00" }),
+            h("span", { class: "ni-ag-txt", text: "Sprint Standup" }),
+          ),
+          h(
+            "div",
+            { class: "ni-ag-item done" },
+            h("span", { class: "ni-ag-chk green-check", text: "✓" }),
+            h("span", { class: "ni-ag-time", text: "14:00" }),
+            h("span", { class: "ni-ag-txt dim", text: "Design Review" }),
+          ),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "compactAiradoro",
+      t("Airadoro"),
+      h(
+        "div",
+        { class: "ni-card-body ni-airadoro" },
+        h(
+          "div",
+          { class: "ni-head" },
+          h("span", { class: "ni-dot sky" }),
+          h("span", { class: "ni-head-title", text: "Airadoro" }),
+          h("span", { class: "ni-pill sky", text: t("Focus") }),
+        ),
+        h(
+          "div",
+          { class: "ni-aira-mid" },
+          h("span", { class: "ni-big-num", text: "25:00" }),
+          h("span", { class: "ni-aira-play" }, svg(ICONS.play, 9)),
+        ),
+        h(
+          "div",
+          { class: "ni-prog-bar" },
+          h("div", { class: "ni-prog-fill sky", style: "width: 45%" }),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "compactPlan",
+      t("Plan usage"),
+      h(
+        "div",
+        { class: "ni-card-body ni-plan" },
+        h(
+          "div",
+          { class: "ni-head" },
+          h("span", { class: "ni-dot emerald" }),
+          h("span", { class: "ni-head-title", text: t("Claude plan") }),
+        ),
+        h(
+          "div",
+          { class: "ni-p-rows" },
+          h(
+            "div",
+            { class: "ni-p-row" },
+            h("span", { class: "ni-p-label", text: t("5 hours") }),
+            h("div", { class: "ni-prog-bar" }, h("div", { class: "ni-prog-fill emerald", style: "width: 28%" })),
+            h("span", { class: "ni-p-pct emerald", text: "28%" }),
+          ),
+          h(
+            "div",
+            { class: "ni-p-row" },
+            h("span", { class: "ni-p-label", text: t("Week") }),
+            h("div", { class: "ni-prog-bar" }, h("div", { class: "ni-prog-fill emerald-dim", style: "width: 45%" })),
+            h("span", { class: "ni-p-pct emerald-dim", text: "45%" }),
+          ),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "featureUpload",
+      t("Drop"),
+      h(
+        "div",
+        { class: "ni-card-body ni-dock-feat" },
+        h(
+          "div",
+          { class: "ni-head" },
+          svg(ICONS.plus, 10, { stroke: 2 }),
+          h("span", { class: "ni-head-title", text: t("Drop") }),
+        ),
+        h(
+          "div",
+          { class: "ni-drop-zone" },
+          svg(ICONS.plus, 11, { stroke: 2 }),
+          h("span", { text: "report.pdf" }),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "featureChat",
+      t("Chat"),
+      h(
+        "div",
+        { class: "ni-card-body ni-dock-feat" },
+        h(
+          "div",
+          { class: "ni-head" },
+          svg(ICONS.bubbleRound, 10),
+          h("span", { class: "ni-head-title", text: t("Chat") }),
+        ),
+        h(
+          "div",
+          { class: "ni-chat-stack" },
+          h("div", { class: "ni-chat-bubble user", text: "Summarize notes" }),
+          h("div", { class: "ni-chat-bubble bot", text: "Here are 3 key points…" }),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "featureAgents",
+      t("Agents"),
+      h(
+        "div",
+        { class: "ni-card-body ni-dock-feat" },
+        h(
+          "div",
+          { class: "ni-head" },
+          svg(ICONS.terminal, 10),
+          h("span", { class: "ni-head-title", text: t("Agents") }),
+        ),
+        h(
+          "div",
+          { class: "ni-rows" },
+          h("div", { class: "ni-mini-row" }, h("span", { class: "ni-dot sky" }), h("span", { class: "ni-mini-txt", text: "Claude Code" })),
+          h("div", { class: "ni-mini-row" }, h("span", { class: "ni-dot emerald" }), h("span", { class: "ni-mini-txt", text: "Codex" })),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "featureClipboard",
+      t("Clips"),
+      h(
+        "div",
+        { class: "ni-card-body ni-dock-feat" },
+        h(
+          "div",
+          { class: "ni-head" },
+          svg(ICONS.clipboard, 10),
+          h("span", { class: "ni-head-title", text: t("Clips") }),
+        ),
+        h(
+          "div",
+          { class: "ni-rows" },
+          h("div", { class: "ni-mini-row" }, h("span", { class: "ni-mini-chip", text: "TXT" }), h("span", { class: "ni-mini-txt", text: "npm run build" })),
+          h("div", { class: "ni-mini-row" }, h("span", { class: "ni-mini-chip", text: "URL" }), h("span", { class: "ni-mini-txt", text: "aira.app/docs" })),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "featureMail",
+      t("Mail"),
+      h(
+        "div",
+        { class: "ni-card-body ni-dock-feat" },
+        h(
+          "div",
+          { class: "ni-head" },
+          svg(ICONS.envelope, 10),
+          h("span", { class: "ni-head-title", text: t("Mail") }),
+          h("span", { class: "ni-pill sky", text: "3" }),
+        ),
+        h(
+          "div",
+          { class: "ni-rows" },
+          h("div", { class: "ni-mini-row" }, h("span", { class: "ni-dot sky" }), h("span", { class: "ni-mini-txt", text: "Design review" })),
+          h("div", { class: "ni-mini-row" }, h("span", { class: "ni-mini-txt dim", text: "Weekly digest" })),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "featureConvert",
+      t("Convert"),
+      h(
+        "div",
+        { class: "ni-card-body ni-dock-feat" },
+        h(
+          "div",
+          { class: "ni-head" },
+          svg(ICONS.convert, 10),
+          h("span", { class: "ni-head-title", text: t("Convert") }),
+        ),
+        h(
+          "div",
+          { class: "ni-conv-row" },
+          h("span", { class: "ni-conv-tag", text: "PNG" }),
+          h("span", { class: "ni-conv-arrow", text: "→" }),
+          h("span", { class: "ni-conv-tag on", text: "WEBP" }),
+        ),
+      ),
+    ),
+  ];
+
+  const syncInfoCards = () => {
+    for (const c of infoCards) {
+      c.btn.classList.toggle("on", settings[c.key] !== false);
+    }
+  };
+  syncInfoCards();
+  const infoCardsGrid = h("div", { class: "notch-info-grid" }, ...infoCards.map((c) => c.btn));
+  const notchInfoCard = card(
+    t("Notch info"),
+    h("div", { class: "hint", text: t("Choose which features and live information are enabled on the notch.") }),
+    infoCardsGrid,
   );
 
   const notchCard = card(
@@ -1620,7 +2026,7 @@ function generalSections(): HTMLElement[] {
   const recapCard = card(t("Weekly recap"), ...recapRows());
   const updatesCard = card(t("Updates"), ...updateRows(toggle, version));
 
-  return [notchStyleCard, notchCard, motionCard, generalCard, displayCard, mascotCard, soundCard, recapCard, updatesCard];
+  return [notchStyleCard, notchInfoCard, notchCard, motionCard, generalCard, displayCard, mascotCard, soundCard, recapCard, updatesCard];
 }
 
 /**

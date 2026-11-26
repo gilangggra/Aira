@@ -7340,6 +7340,13 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   justify-content: center;
   flex-wrap: wrap;
   gap: 6px;
+  max-height: 52px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.dash-agents::-webkit-scrollbar {
+  display: none;
 }
 
 .dash-agent-chip {
@@ -7528,17 +7535,15 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 
 .overview-detail {
   display: flex;
+  flex: 1 1 auto;
+  width: 100%;
   gap: 10px;
   height: 100%;
 }
 
 .overview-detail > .left {
-  flex: 0 0 392px;
-  width: 392px;
-}
-
-.overview-detail > .right {
   flex: 1 1 auto;
+  width: 100%;
 }
 
 .dash-back-pill {
@@ -7903,8 +7908,8 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 /* ── Slightly tighter expanded spacing for flexible view heights ────────── */
 
 .overview-detail > .left {
-  flex: 0 0 336px;
-  width: 336px;
+  flex: 1 1 auto;
+  width: 100%;
 }
 
 .overview-detail .left-body {

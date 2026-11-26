@@ -226,14 +226,13 @@ export function sanitizeDeclared(d: Declared, os: HostOs = HOST_OS): Declared {
 
 /**
  * Declares or undeclares a pill. Returns the new list, or null when the click
- * changes nothing: the main pill is never toggled, an unknown pill never
- * declared, and a fifth pill never added.
+ * changes nothing: the main pill is never toggled and an unknown pill never
+ * declared.
  */
 export function toggleDeclared(d: Declared, id: string, os: HostOs = HOST_OS): string[] | null {
   if (id === d.mainPill) return null;
   if (!availablePills(os).some((p) => p.id === id)) return null;
   if (d.activeIntegrations.includes(id)) return d.activeIntegrations.filter((x) => x !== id);
-  if (d.activeIntegrations.length >= MAX_DECLARED) return null;
   return [...d.activeIntegrations, id];
 }
 

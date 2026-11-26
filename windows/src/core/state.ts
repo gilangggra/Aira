@@ -138,6 +138,18 @@ export interface Settings {
   pageIcons?: boolean;
   /** Island motion speed: "normal" (default) or "fast". */
   animationSpeed?: string;
+  /** Compact closed-notch live info widgets & dock features (all default true). */
+  compactMusic?: boolean;
+  compactAgenda?: boolean;
+  compactAiradoro?: boolean;
+  compactPlan?: boolean;
+  compactWeather?: boolean;
+  featureUpload?: boolean;
+  featureChat?: boolean;
+  featureAgents?: boolean;
+  featureClipboard?: boolean;
+  featureMail?: boolean;
+  featureConvert?: boolean;
   absenceInterval: number;
   /** Declared pills next to the main one (at most 4), in the order they were added. */
   activeIntegrations: string[];
@@ -242,6 +254,17 @@ export const DEFAULT_SETTINGS: Settings = {
   glassTint: 50,
   pageIcons: true,
   animationSpeed: "normal",
+  compactMusic: true,
+  compactAgenda: true,
+  compactAiradoro: true,
+  compactPlan: true,
+  compactWeather: true,
+  featureUpload: true,
+  featureChat: true,
+  featureAgents: true,
+  featureClipboard: true,
+  featureMail: true,
+  featureConvert: true,
   absenceInterval: 180,
   activeIntegrations: [
     "integration_resend", "integration_n8n", "integration_vercel", "integration_github",
