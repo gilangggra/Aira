@@ -171,11 +171,11 @@ export async function startHub(root: HTMLElement, opts: HubOptions) {
     updateSearchRowHighlights();
     const token = ++rendering;
     const page_ = h("div", { class: "hub-page" });
+    page_.append(h("h1", { class: "hub-page-title", text: def.title() }));
     const renderer = opts.flowPages[def.id];
     if (renderer) {
       await renderer(page_, ctx);
     } else {
-      page_.append(h("h1", { class: "hub-page-title", text: def.title() }));
       const container = h("div", { id: "settings-root" });
       page_.append(container);
       await opts.renderNotch(def.id, container);
