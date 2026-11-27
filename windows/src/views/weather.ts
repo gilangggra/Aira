@@ -165,51 +165,54 @@ class WeatherFxEngine {
   }
 
   private spawnParticle(randomY: boolean): FxParticle {
+    return this.respawnParticle(
+      { x: 0, y: 0, vx: 0, vy: 0, size: 1, alpha: 0.5, phase: 0 },
+      randomY,
+    );
+  }
+
+  private respawnParticle(p: FxParticle, randomY: boolean): FxParticle {
     const k = this.scene.kind;
     const windDrift = Math.max(6, this.scene.windKmh * 1.4);
     if (k === "rain" || k === "storm" || k === "drizzle") {
       const speed = k === "drizzle" ? 185 : k === "storm" ? 310 : 255;
-      return {
-        x: Math.random() * (this.w + 60) - 30,
-        y: randomY ? Math.random() * this.h : -14,
-        vx: -windDrift * 0.9,
-        vy: speed + Math.random() * 65,
-        size: k === "drizzle" ? 7 : 11 + Math.random() * 6,
-        alpha: k === "drizzle" ? 0.16 + Math.random() * 0.14 : 0.22 + Math.random() * 0.2,
-        phase: Math.random() * Math.PI * 2,
-      };
+      p.x = Math.random() * (this.w + 60) - 30;
+      p.y = randomY ? Math.random() * this.h : -14;
+      p.vx = -windDrift * 0.9;
+      p.vy = speed + Math.random() * 65;
+      p.size = k === "drizzle" ? 7 : 11 + Math.random() * 6;
+      p.alpha = k === "drizzle" ? 0.16 + Math.random() * 0.14 : 0.22 + Math.random() * 0.2;
+      p.phase = Math.random() * Math.PI * 2;
+      return p;
     }
     if (k === "snow") {
-      return {
-        x: Math.random() * this.w,
-        y: randomY ? Math.random() * this.h : -8,
-        vx: -windDrift * 0.28,
-        vy: 22 + Math.random() * 20,
-        size: 1.3 + Math.random() * 1.8,
-        alpha: 0.35 + Math.random() * 0.35,
-        phase: Math.random() * Math.PI * 2,
-      };
+      p.x = Math.random() * this.w;
+      p.y = randomY ? Math.random() * this.h : -8;
+      p.vx = -windDrift * 0.28;
+      p.vy = 22 + Math.random() * 20;
+      p.size = 1.3 + Math.random() * 1.8;
+      p.alpha = 0.35 + Math.random() * 0.35;
+      p.phase = Math.random() * Math.PI * 2;
+      return p;
     }
     if (k === "cloudy" || k === "fog" || k === "partly-cloudy") {
-      return {
-        x: Math.random() * (this.w + 140) - 70,
-        y: 10 + Math.random() * (this.h * 0.65),
-        vx: 4 + windDrift * 0.18 + Math.random() * 4,
-        vy: 0,
-        size: 45 + Math.random() * 55,
-        alpha: k === "fog" ? 0.08 : 0.055,
-        phase: Math.random() * Math.PI * 2,
-      };
+      p.x = Math.random() * (this.w + 140) - 70;
+      p.y = 10 + Math.random() * (this.h * 0.65);
+      p.vx = 4 + windDrift * 0.18 + Math.random() * 4;
+      p.vy = 0;
+      p.size = 45 + Math.random() * 55;
+      p.alpha = k === "fog" ? 0.08 : 0.055;
+      p.phase = Math.random() * Math.PI * 2;
+      return p;
     }
-    return {
-      x: Math.random() * this.w,
-      y: Math.random() * this.h,
-      vx: this.scene.isDay ? 3 + Math.random() * 4 : 0,
-      vy: this.scene.isDay ? -2 - Math.random() * 3 : 0,
-      size: this.scene.isDay ? 1.1 + Math.random() * 1.3 : 0.8 + Math.random() * 1.2,
-      alpha: 0.25 + Math.random() * 0.48,
-      phase: Math.random() * Math.PI * 2,
-    };
+    p.x = Math.random() * this.w;
+    p.y = Math.random() * this.h;
+    p.vx = this.scene.isDay ? 3 + Math.random() * 4 : 0;
+    p.vy = this.scene.isDay ? -2 - Math.random() * 3 : 0;
+    p.size = this.scene.isDay ? 1.1 + Math.random() * 1.3 : 0.8 + Math.random() * 1.2;
+    p.alpha = 0.25 + Math.random() * 0.48;
+    p.phase = Math.random() * Math.PI * 2;
+    return p;
   }
 
   private step(dt: number, now: number) {
@@ -235,7 +238,7 @@ class WeatherFxEngine {
 
       if (k === "rain" || k === "storm" || k === "drizzle" || k === "snow") {
         if (p.y > this.h + 14 || p.x < -40 || p.x > this.w + 40) {
-          this.particles[i] = this.spawnParticle(false);
+          this.respawnParticle(p, false);
         }
       } else if (k === "cloudy" || k === "fog" || k === "partly-cloudy") {
         if (p.x - p.size > this.w + 50) {

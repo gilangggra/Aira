@@ -90,11 +90,11 @@ export function buildTrackLyrics(trackKey: string, payload: LyricsPayload | null
 
 /**
  * Returns the index of the line currently playing at `positionSec`,
- * with a subtle +150ms cue lead so transitions feel responsive.
+ * with a +300ms cue lead to compensate for SMTC & scroll transition latency.
  */
 export function activeLyricIndex(lines: readonly LyricLine[], positionSec: number): number {
   if (lines.length === 0 || !Number.isFinite(positionSec)) return -1;
-  const target = Math.max(0, positionSec + 0.15);
+  const target = Math.max(0, positionSec + 0.3);
   let lo = 0;
   let hi = lines.length - 1;
   let best = -1;

@@ -198,9 +198,9 @@ class AiradoroManager {
       if (task) task.pillBadge = null;
 
       if (State.mode !== "expanded") {
-        this.island?.alert("overview");
-      } else if (State.view !== "overview") {
-        State.view = "overview";
+        this.island?.alert("airadoro");
+      } else if (State.view !== "airadoro") {
+        this.island?.setView("airadoro");
       }
     } else if (State.focusId !== AIRADORO_ID) {
       State.setPillBadge(AIRADORO_ID, "finished");
@@ -212,6 +212,7 @@ class AiradoroManager {
     if (State.mode !== "expanded") return true;
     switch (State.view) {
       case "overview":
+      case "airadoro":
       case "empty":
       case "finished":
       case "error":

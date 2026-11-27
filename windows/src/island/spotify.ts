@@ -55,7 +55,9 @@ export function syncPillName() {
 let shown = false;
 
 function refreshWhenShown() {
-  const now = State.mode === "expanded" && State.view === "overview" && State.focusTask?.id === SPOTIFY_ID;
+  const now =
+    State.mode === "expanded" &&
+    (State.view === "music" || (State.view === "overview" && State.focusTask?.id === SPOTIFY_ID));
   if (now && !shown) void Bridge.spotifyRefresh();
   shown = now;
 }

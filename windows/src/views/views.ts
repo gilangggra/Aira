@@ -36,7 +36,7 @@ import { buildWhatsAppCard } from "./whatsapp";
 import { WHATSAPP_ID } from "../core/whatsapp";
 import { MAIL_ID, type MailCardData } from "../core/mail";
 import { buildMailCard } from "./mail";
-import { buildAiradoroCard } from "./airadoro";
+import { buildAiradoroView } from "./airadoro";
 import { AIRADORO_ID, AiradoroEngine } from "../core/airadoro";
 import { Airadoro } from "../island/airadoro";
 import { Weather, formatTemp } from "../core/weather";
@@ -349,6 +349,7 @@ function buildHomeDashboard(
   openTaskDetail: (taskId: string) => void,
 ): DashHost {
   const clockEl = h("div", { class: "dash-clock" });
+  const dateSubEl = h("div", { class: "dash-date-sub" });
   const agentsRow = h("div", { class: "dash-agents" });
 
   // Card 1: Jobs today (Tasks + Active Agents indicator)
@@ -424,7 +425,7 @@ function buildHomeDashboard(
       class: "dash-card dash-focus",
       onclick: () => {
         actions.blip();
-        openTaskDetail(AIRADORO_ID);
+        actions.setView("airadoro");
       },
     },
     h("div", { class: "dash-focus-meta" }, focusClock, focusSub),
@@ -432,7 +433,7 @@ function buildHomeDashboard(
   );
 
   const cardsRow = h("div", { class: "dash-grid" }, jobsCard, mediaCard, focusCard);
-  const el = h("div", { class: "dash-wrap" }, clockEl, agentsRow, cardsRow);
+  const el = h("div", { class: "dash-wrap" }, clockEl, dateSubEl, agentsRow, cardsRow);
   let lastAgentKey = "";
 
   return {
@@ -452,11 +453,12 @@ function buildHomeDashboard(
       if (runningAgents.length > 0) jobsBadge.textContent = `${runningAgents.length}`;
 
       const pillTasks = tasks
-        .filter((t) =>
-          t.id !== SPOTIFY_ID &&
-          t.id !== AIRADORO_ID &&
-          (t.state !== "idle" || t.steps.length > 0 || t.pillBadge != null),
-        )
+        .filter((t) => {
+          if (t.id === SPOTIFY_ID || t.id === AIRADORO_ID) return false;
+          const configured = State.integrations[t.id]?.configured;
+          if (t.state === "idle" && t.pillBadge == null && configured === false) return false;
+          return t.state !== "idle" || t.steps.length > 0 || t.pillBadge != null;
+        })
         .sort((a, b) => Number(b.state !== "idle") - Number(a.state !== "idle"));
       const aKey = pillTasks.map((t) => `${t.id}:${t.state}:${t.color}:${t.pillBadge ?? ""}`).join("|");
       if (aKey !== lastAgentKey) {
@@ -525,12 +527,50 @@ function buildHomeDashboard(
       const showJobs = State.settings.compactAgenda !== false;
       const showMedia = State.settings.compactMusic !== false;
       const showFocus = State.settings.compactAiradoro !== false;
+      const hasCards = showJobs || showMedia || showFocus;
+      const standby = !hasCards && pillTasks.length === 0;
+      el.classList.toggle("is-standby", standby);
+      if (standby) {
+        const dateLabel = now.toLocaleDateString(language(), {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        });
+        if (dateSubEl.textContent !== dateLabel) dateSubEl.textContent = dateLabel;
+      }
       jobsCard.style.display = showJobs ? "" : "none";
       mediaCard.style.display = showMedia ? "" : "none";
       focusCard.style.display = showFocus ? "" : "none";
-      cardsRow.style.display = showJobs || showMedia || showFocus ? "" : "none";
+      cardsRow.style.display = hasCards ? "" : "none";
     },
   };
+}
+
+function dashNeedsTick(): boolean {
+  return (
+    (Airadoro.snapshot.phase !== "idle" && !Airadoro.snapshot.paused) ||
+    (Spotify.state.playing && Spotify.state.track != null)
+  );
+}
+
+function createDashTicker(dash: DashHost): (run: boolean) => void {
+  let timer: number | null = null;
+  const syncTimer = (run: boolean) => {
+    if (!run) {
+      if (timer != null) window.clearInterval(timer);
+      timer = null;
+      return;
+    }
+    if (timer != null) return;
+    timer = window.setInterval(() => {
+      if (State.mode === "expanded" && (State.view === "overview" || State.view === "empty") && dashNeedsTick()) {
+        dash.sync(State.tasks);
+      } else {
+        syncTimer(false);
+      }
+    }, 500);
+  };
+  return syncTimer;
 }
 
 // ── Overview ──────────────────────────────────────────────────────────────────
@@ -580,11 +620,10 @@ function buildOverview(actions: ViewActions): ViewHost {
   // Opened from a plan pill in the header: stands in for the left card.
   const plan = new PlanCard();
   let planTimer: number | null = null;
-  let focusDashTimer: number | null = null;
+  const syncFocusDashTimer = createDashTicker(dash);
   // Spotify's card is kept and updated in place: the progress bar
   // runs on, and a slider being dragged must not be rebuilt under the pointer.
   const spotifyCard = buildSpotifyCard();
-  const airadoroCard = buildAiradoroCard();
   // WhatsApp's card too: its reply field keeps the draft and the keyboard while messages arrive.
   // Mail's card too (classic Outlook): the search field keeps its text and the keyboard.
   const mailCard = buildMailCard({ keyboard: (on) => actions.keyboard(on) });
@@ -659,26 +698,6 @@ function buildOverview(actions: ViewActions): ViewHost {
       if (planCardOpen() && State.mode === "expanded") State.notify();
       else stop();
     }, 30_000);
-  }
-
-  const dashNeedsTick = () =>
-    (Airadoro.snapshot.phase !== "idle" && !Airadoro.snapshot.paused) ||
-    (Spotify.state.playing && Spotify.state.track != null);
-
-  function syncFocusDashTimer(run: boolean) {
-    if (!run) {
-      if (focusDashTimer != null) window.clearInterval(focusDashTimer);
-      focusDashTimer = null;
-      return;
-    }
-    if (focusDashTimer != null) return;
-    focusDashTimer = window.setInterval(() => {
-      if (State.mode === "expanded" && (State.view === "overview" || State.view === "empty") && dashNeedsTick()) {
-        dash.sync(State.tasks);
-      } else {
-        syncFocusDashTimer(false);
-      }
-    }, 500);
   }
 
   return {
@@ -820,13 +839,9 @@ function buildOverview(actions: ViewActions): ViewHost {
         }
         whatsappCard.sync();
       } else if (task && task.id === AIRADORO_ID) {
-        if (mode !== "airadoro") {
-          clear(leftBody);
-          leftBody.append(airadoroCard.el);
-          mode = "airadoro";
-          cardKey = "";
-        }
-        airadoroCard.sync();
+        overviewScreen = "dash";
+        actions.setView("airadoro");
+        return;
       } else if (task) {
         const info = State.integrations[task.id];
         const key = [
@@ -875,10 +890,12 @@ function buildEmpty(actions: ViewActions): ViewHost {
     actions.setFocus(taskId);
     actions.setView("overview");
   });
+  const syncDashTimer = createDashTicker(dash);
   const el = h("div", { class: "view overview is-dash empty-dash" }, dash.el);
   return {
     el,
     sync() {
+      syncDashTimer(State.mode === "expanded" && dashNeedsTick());
       dash.sync(State.tasks);
     },
   };
@@ -1238,7 +1255,7 @@ function buildSettings(actions: ViewActions): ViewHost {
   );
 
   const el = h("div", { class: "view" },
-    card(null, h("div", { class: "stack", style: "padding:14px 16px 14px 84px" }, rows)));
+    card(null, h("div", { class: "stack", style: "padding:14px 16px" }, rows)));
 
   return {
     el,
@@ -1258,18 +1275,6 @@ function buildSettings(actions: ViewActions): ViewHost {
       apiBadge.append(dot("#F4505E", 6), h("span", { text: "API" }));
     },
   };
-}
-
-// ── Placeholders filled in later stages ───────────────────────────────────────
-
-function buildPlaceholder(title: Msg, sub: string): ViewHost {
-  const body = h(
-    "div",
-    { class: "stack", style: "padding:0 18px 0 118px" },
-    h("div", { class: "title", text: title }),
-    h("div", { class: "sub", text: sub }),
-  );
-  return { el: h("div", { class: "view" }, card(null, body)), sync() { } };
 }
 
 // ── Registry ──────────────────────────────────────────────────────────────────
@@ -1304,8 +1309,6 @@ export function buildViews(
   map.set("clipboard", buildClipboardView(actions));
   map.set("mail", buildMailView(actions));
   map.set("music", buildMusicView());
-  // Not in the Windows v1: web search & web result.
-  map.set("searching", buildPlaceholder(tl("Claude is searching…"), ""));
-  map.set("result", buildPlaceholder(tl("Result"), ""));
+  map.set("airadoro", buildAiradoroView(actions));
   return map;
 }

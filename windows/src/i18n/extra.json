@@ -3181,21 +3181,6 @@
       "ko": "OpenCode를 재시작하면 플러그인이 적용돼요.",
       "ja": "プラグインを読み込むには OpenCode を再起動してください。"
     },
-    "Result": {
-      "zh-Hans": "结果",
-      "hi": "परिणाम",
-      "es": "Resultado",
-      "ar": "النتيجة",
-      "fr": "Résultat",
-      "bn": "ফলাফল",
-      "pt-BR": "Resultado",
-      "ru": "Результат",
-      "id": "Hasil",
-      "de": "Ergebnis",
-      "tr": "Sonuç",
-      "ko": "결과",
-      "ja": "結果"
-    },
     "Saturday": {
       "zh-Hans": "星期六",
       "hi": "शनिवार",

@@ -83,16 +83,33 @@ function isValidTask(raw: unknown): raw is AgendaTask {
   );
 }
 
+let cachedStore: Storage | null = null;
+let cachedRaw: string | null = null;
+let cachedTasks: AgendaTask[] | null = null;
+
 /** Loads persisted agenda tasks, discarding any malformed entries. */
 export function loadAgendaTasks(): AgendaTask[] {
   const store = storage();
-  if (!store) return [];
+  if (!store) {
+    cachedStore = null;
+    cachedRaw = null;
+    cachedTasks = null;
+    return [];
+  }
   try {
     const raw = store.getItem(AGENDA_STORAGE_KEY);
-    if (!raw) return [];
+    if (!raw) {
+      cachedStore = store;
+      cachedRaw = null;
+      cachedTasks = [];
+      return [];
+    }
+    if (store === cachedStore && raw === cachedRaw && cachedTasks !== null) {
+      return [...cachedTasks];
+    }
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isValidTask).map((t) => {
+    const normalized = parsed.filter(isValidTask).map((t) => {
       const repeat = normalizeRepeat(t.repeat);
       return {
         id: t.id,
@@ -106,6 +123,10 @@ export function loadAgendaTasks(): AgendaTask[] {
         notifiedAt: typeof t.notifiedAt === "string" ? t.notifiedAt : undefined,
       };
     });
+    cachedStore = store;
+    cachedRaw = raw;
+    cachedTasks = normalized;
+    return [...normalized];
   } catch {
     return [];
   }
@@ -116,7 +137,11 @@ export function saveAgendaTasks(tasks: readonly AgendaTask[]): void {
   const store = storage();
   if (!store) return;
   try {
-    store.setItem(AGENDA_STORAGE_KEY, JSON.stringify(tasks));
+    const raw = JSON.stringify(tasks);
+    store.setItem(AGENDA_STORAGE_KEY, raw);
+    cachedStore = store;
+    cachedRaw = raw;
+    cachedTasks = [...tasks];
   } catch {
     // Storage quota exceeded or unavailable; ignore gracefully.
   }

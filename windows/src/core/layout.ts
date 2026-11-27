@@ -17,8 +17,6 @@ export type IslandViewName =
   | "choose"
   | "mail"
   | "prompt"
-  | "searching"
-  | "result"
   | "note"
   | "settings"
   | "greeting"
@@ -32,6 +30,7 @@ export type IslandViewName =
   | "weather"
   | "clipboard"
   | "music"
+  | "airadoro"
   | "convert";
 
 export type BotStateName =
@@ -92,8 +91,6 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   choose: { height: 220, botX: 60, botY: 101, botDiameter: 52, agentMode: "column" },
   mail: { height: 292, botX: 320, botY: 19, botDiameter: 22, agentMode: "column" },
   prompt: { height: 308, botX: 320, botY: 19, botDiameter: 22, agentMode: "column" },
-  searching: { height: 224, botX: 52, botY: null, botDiameter: 44, agentMode: "column" },
-  result: { height: 236, botX: 52, botY: null, botDiameter: 44, agentMode: "column" },
   note: { height: 212, botX: 60, botY: null, botDiameter: 50, agentMode: "column" },
   settings: { height: 276, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
   greeting: { height: 150, botX: 320, botY: 90, botDiameter: 0, agentMode: "none" },
@@ -119,6 +116,8 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   clipboard: { height: 306, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
   // Dedicated full-bleed artwork music stage + live synced lyric headline.
   music: { height: 306, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
+  // Dedicated Airadoro focus timer view.
+  airadoro: { height: 280, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
   // Local file converter (FFmpeg, LibreOffice headless, Pandoc).
   convert: { height: 296, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
 };
