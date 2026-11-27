@@ -497,17 +497,22 @@ export function buildSpotifyCard(): SpotifyCardHost {
     paintLyricsState();
   }
 
-  /** The position runs on its own clock (250 ms with live lyrics, else 500 ms) while playing on screen. */
+  /** The position runs on its own clock (100 ms with live lyrics, else 500 ms) while playing on screen. */
   function syncTimer() {
     const run = Spotify.state.playing && showing === "playing" && el.isConnected &&
       State.mode === "expanded" && State.view === "overview";
-    const intervalMs = SpotifyLyrics.current?.synced ? 250 : 500;
+    const intervalMs = SpotifyLyrics.current?.synced ? 100 : 500;
     if (run && timer == null) {
+      let tickCount = 0;
       timer = window.setInterval(() => {
         if (!(Spotify.state.playing && el.isConnected && State.mode === "expanded" && State.view === "overview")) {
           if (timer != null) window.clearInterval(timer);
           timer = null;
           return;
+        }
+        tickCount++;
+        if (SpotifyLyrics.current?.synced && tickCount % 30 === 0) {
+          void Bridge.spotifyRefresh();
         }
         paintProgress();
       }, intervalMs);
@@ -798,13 +803,18 @@ export function buildMusicView(): SpotifyCardHost {
   function syncTimer() {
     const run = Spotify.state.playing && showing === "playing" && el.isConnected &&
       State.mode === "expanded" && State.view === "music";
-    const intervalMs = SpotifyLyrics.current?.synced ? 250 : 500;
+    const intervalMs = SpotifyLyrics.current?.synced ? 100 : 500;
     if (run && timer == null) {
+      let tickCount = 0;
       timer = window.setInterval(() => {
         if (!(Spotify.state.playing && el.isConnected && State.mode === "expanded" && State.view === "music")) {
           if (timer != null) window.clearInterval(timer);
           timer = null;
           return;
+        }
+        tickCount++;
+        if (SpotifyLyrics.current?.synced && tickCount % 30 === 0) {
+          void Bridge.spotifyRefresh();
         }
         paintProgress();
       }, intervalMs);

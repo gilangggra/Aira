@@ -74,13 +74,19 @@ function isLikelyCode(trimmed: string): boolean {
   if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
     if (trimmed.includes('":') || trimmed.includes("':")) return true;
   }
-  if (CODE_TOKEN_RE.test(trimmed)) return true;
-  if (trimmed.includes("\n")) {
-    const lines = trimmed.split(/\r?\n/);
-    const hasBraces = trimmed.includes("{") && trimmed.includes("}");
-    const hasSemicolonLines = lines.filter((l) => l.trimEnd().endsWith(";")).length >= 2;
-    const hasIndentedLines = lines.filter((l) => /^(?:  |\t)\S/.test(l)).length >= 2;
-    if (hasBraces || hasSemicolonLines || hasIndentedLines) return true;
+  const sample = trimmed.length > 2048 ? trimmed.slice(0, 2048) : trimmed;
+  if (CODE_TOKEN_RE.test(sample)) return true;
+  if (sample.includes("\n")) {
+    const lines = sample.split(/\r?\n/);
+    const hasBraces = sample.includes("{") && sample.includes("}");
+    let semicolonCount = 0;
+    let indentedCount = 0;
+    for (const l of lines) {
+      if (l.trimEnd().endsWith(";")) semicolonCount++;
+      if (/^(?:  |\t)\S/.test(l)) indentedCount++;
+      if (semicolonCount >= 2 || indentedCount >= 2) return true;
+    }
+    if (hasBraces) return true;
   }
   return false;
 }
@@ -165,7 +171,18 @@ export function addClipboardEntry(
   if (!rawText || !rawText.trim()) return [...entries];
   const text = rawText.length > MAX_CLIPBOARD_CHARS ? rawText.slice(0, MAX_CLIPBOARD_CHARS) : rawText;
 
-  const existing = entries.find((e) => e.text === text);
+  let existing: ClipboardEntry | undefined;
+  const pinned: ClipboardEntry[] = [];
+  const unpinned: ClipboardEntry[] = [];
+  for (const e of entries) {
+    if (e.text === text) {
+      existing = e;
+      continue;
+    }
+    if (e.pinned) pinned.push(e);
+    else unpinned.push(e);
+  }
+
   const entry: ClipboardEntry = existing
     ? { ...existing, copiedAt: now }
     : {
@@ -177,14 +194,11 @@ export function addClipboardEntry(
         sensitive: isSensitiveClipboardText(text),
       };
 
-  const rest = entries.filter((e) => e.text !== text);
-  const combined = [entry, ...rest];
+  if (entry.pinned) pinned.unshift(entry);
+  else unpinned.unshift(entry);
 
-  const pinned = combined.filter((e) => e.pinned);
   const unpinnedLimit = Math.max(0, MAX_CLIPBOARD_ITEMS - pinned.length);
-  const unpinned = combined.filter((e) => !e.pinned).slice(0, unpinnedLimit);
-
-  const next = [...pinned, ...unpinned].sort((a, b) => {
+  const next = [...pinned, ...unpinned.slice(0, unpinnedLimit)].sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     return b.copiedAt - a.copiedAt;
   });

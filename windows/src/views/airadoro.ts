@@ -14,7 +14,8 @@ import {
 } from "../core/airadoro";
 import { State, type AgentTask, type PillBadge } from "../core/state";
 import { createMiniBot } from "../mochi/minibots";
-import { t } from "../i18n/i18n";
+import { t, tl } from "../i18n/i18n";
+import type { ViewActions, ViewHost } from "./views";
 
 const ACCENT_COLOR = "#0EA5E9";
 
@@ -99,7 +100,6 @@ export interface AiradoroCardHost {
 
 export function buildAiradoroCard(): AiradoroCardHost {
   const el = h("div", { class: "int-card airadoro-card" });
-  el.style.padding = "10px 14px 0 108px";
 
   const subtitleSpan = h("span", { text: t("Ready") });
   const head = h("div", { class: "int-head" },
@@ -281,6 +281,201 @@ export function buildAiradoroCard(): AiradoroCardHost {
     }
 
     // 5. Active live timer
+    syncTimer();
+  }
+
+  sync();
+  return { el, sync };
+}
+
+// ── Dedicated Airadoro Focus View ─────────────────────────────────────────────
+
+export function buildAiradoroView(actions: ViewActions): ViewHost {
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const RING_R = 54;
+  const RING_CIRC = 2 * Math.PI * RING_R;
+
+  const backBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "airadoro-back-btn",
+      onclick: () => {
+        actions.blip();
+        actions.setView("overview");
+      },
+    },
+    svg(ICONS.chevronLeft, 10, { stroke: 2 }),
+    h("span", { text: tl("Home") }),
+  );
+
+  const ringSvg = document.createElementNS(SVG_NS, "svg");
+  ringSvg.setAttribute("viewBox", "0 0 128 128");
+  ringSvg.setAttribute("class", "airadoro-ring-svg");
+
+  const ringBg = document.createElementNS(SVG_NS, "circle");
+  ringBg.setAttribute("cx", "64");
+  ringBg.setAttribute("cy", "64");
+  ringBg.setAttribute("r", String(RING_R));
+  ringBg.setAttribute("class", "airadoro-ring-bg");
+
+  const ringFg = document.createElementNS(SVG_NS, "circle");
+  ringFg.setAttribute("cx", "64");
+  ringFg.setAttribute("cy", "64");
+  ringFg.setAttribute("r", String(RING_R));
+  ringFg.setAttribute("class", "airadoro-ring-fg");
+  ringFg.style.strokeDasharray = `${RING_CIRC.toFixed(2)}`;
+  ringFg.style.strokeDashoffset = `${RING_CIRC.toFixed(2)}`;
+
+  ringSvg.append(ringBg, ringFg);
+
+  const clockEl = h("div", { class: "airadoro-ring-clock", text: "25:00" });
+  const phaseLabel = h("div", { class: "airadoro-ring-phase", text: t("Ready") });
+  const ringWrap = h(
+    "div",
+    { class: "airadoro-ring-wrap" },
+    ringSvg,
+    h("div", { class: "airadoro-ring-center" }, clockEl, phaseLabel),
+  );
+
+  const metaBadge = h("span", { class: "airadoro-meta-badge", text: "25m" });
+  const sideHead = h(
+    "div",
+    { class: "airadoro-side-head" },
+    dot(ACCENT_COLOR, 7),
+    h("span", { class: "airadoro-side-name", text: "Airadoro" }),
+    metaBadge,
+  );
+
+  const taskPill = h("div", { class: "airadoro-task-pill" });
+  const controlsEl = h("div", { class: "airadoro-view-controls" });
+  const sidePanel = h("div", { class: "airadoro-side" }, sideHead, taskPill, controlsEl);
+
+  const stage = h("div", { class: "airadoro-stage" }, ringWrap, sidePanel);
+  const el = h("div", { class: "view airadoro-view" }, backBtn, stage);
+
+  let timer: number | null = null;
+  let lastControlsKey = "";
+
+  function makeActionBtn(
+    label: string,
+    kind: "primary" | "secondary" | "done",
+    onClick: () => void,
+    iconPath?: string,
+  ): HTMLElement {
+    return h(
+      "button",
+      {
+        type: "button",
+        class: `airadoro-action-btn ${kind}`,
+        onclick: () => {
+          actions.blip();
+          onClick();
+        },
+      },
+      iconPath ? svg(iconPath, 10, { stroke: kind === "done" ? 2.4 : 1.8 }) : null,
+      h("span", { text: label }),
+    );
+  }
+
+  function paintClock() {
+    const snap = Airadoro.snapshot;
+    const config = getAiradoroConfig();
+    const total = snap.phase === "rest" ? config.rest : config.work;
+    const seconds = snap.phase === "idle" ? config.work : (Airadoro.remaining() ?? 0);
+    clockEl.textContent = AiradoroEngine.clock(seconds);
+
+    const ratio = snap.phase === "idle"
+      ? 0
+      : Math.min(1, Math.max(0, (total - seconds) / Math.max(1, total)));
+    ringFg.style.strokeDashoffset = `${(RING_CIRC * (1 - ratio)).toFixed(2)}`;
+    metaBadge.textContent = snap.phase === "idle"
+      ? `${Math.round(config.work / 60)}m`
+      : `${Math.round(ratio * 100)}%`;
+  }
+
+  function syncTimer() {
+    const snap = Airadoro.snapshot;
+    const running = snap.phase !== "idle" && !snap.paused && State.mode === "expanded" && State.view === "airadoro";
+    if (running && timer == null) {
+      timer = window.setInterval(() => {
+        const stillRunning =
+          Airadoro.snapshot.phase !== "idle" &&
+          !Airadoro.snapshot.paused &&
+          State.mode === "expanded" &&
+          State.view === "airadoro";
+        if (!stillRunning) {
+          if (timer != null) window.clearInterval(timer);
+          timer = null;
+          return;
+        }
+        paintClock();
+      }, 500);
+    } else if (!running && timer != null) {
+      window.clearInterval(timer);
+      timer = null;
+    }
+  }
+
+  function sync() {
+    const snap = Airadoro.snapshot;
+    const phaseState = snap.paused ? "paused" : snap.phase;
+    el.dataset.phase = phaseState;
+    phaseLabel.textContent = snap.paused
+      ? t("Paused")
+      : snap.phase === "work"
+        ? t("Work")
+        : snap.phase === "rest"
+          ? t("Rest")
+          : t("Ready");
+
+    paintClock();
+
+    const taskLabel = snap.phase !== "idle" && Airadoro.taskTitle ? `🎯 ${Airadoro.taskTitle}` : null;
+    if (taskLabel) {
+      taskPill.textContent = taskLabel;
+      taskPill.style.display = "";
+    } else {
+      taskPill.style.display = "none";
+    }
+
+    const workMins = loadStoredMinutes(AIRADORO_STORAGE_WORK, DEFAULT_WORK_MINUTES);
+    const controlsKey = `${snap.phase}:${snap.paused}:${workMins}:${Boolean(Airadoro.taskId)}`;
+    if (controlsKey !== lastControlsKey) {
+      lastControlsKey = controlsKey;
+      clear(controlsEl);
+      if (snap.phase === "idle") {
+        const durSeg = h("div", { class: "airadoro-dur-seg" });
+        for (const mins of [15, 25, 45]) {
+          durSeg.append(
+            h("button", {
+              type: "button",
+              class: workMins === mins ? "airadoro-dur-btn on" : "airadoro-dur-btn",
+              text: `${mins}m`,
+              onclick: () => {
+                actions.blip();
+                saveStoredMinutes(AIRADORO_STORAGE_WORK, mins);
+                sync();
+              },
+            }),
+          );
+        }
+        controlsEl.append(durSeg, makeActionBtn(t("Start"), "primary", () => Airadoro.begin(), ICONS.play));
+      } else if (snap.paused) {
+        controlsEl.append(makeActionBtn(t("Resume"), "primary", () => Airadoro.resume(), ICONS.play));
+        if (Airadoro.taskId) {
+          controlsEl.append(makeActionBtn(t("Done"), "done", () => Airadoro.completeFocusedTask(), ICONS.check));
+        }
+        controlsEl.append(makeActionBtn(t("Stop"), "secondary", () => Airadoro.stop(), ICONS.xmark));
+      } else {
+        controlsEl.append(makeActionBtn(t("Pause"), "secondary", () => Airadoro.pause(), ICONS.pause));
+        if (Airadoro.taskId) {
+          controlsEl.append(makeActionBtn(t("Done"), "done", () => Airadoro.completeFocusedTask(), ICONS.check));
+        }
+        controlsEl.append(makeActionBtn(t("Stop"), "secondary", () => Airadoro.stop(), ICONS.xmark));
+      }
+    }
+
     syncTimer();
   }
 

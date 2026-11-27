@@ -424,7 +424,7 @@ export class Island {
       focusTask: (title, taskId) => {
         if (Airadoro.startForTask(title, taskId)) {
           State.setFocus(AIRADORO_ID);
-          this.setView("overview");
+          this.setView("airadoro");
         }
       },
       sendToChat: (text) => {
@@ -556,7 +556,7 @@ export class Island {
           if (me.button === 0) {
             Sound.play("click");
             State.setFocus(AIRADORO_ID);
-            this.expand("overview");
+            this.expand("airadoro");
           }
         },
       },
@@ -2002,6 +2002,10 @@ export class Island {
     const showDock = live && !this.uploadActive && !DOCK_HIDDEN_VIEWS.has(State.view);
     const musicHeroOn = live && State.view === "music" && !this.uploadActive && Spotify.state.track != null;
     this.islandEl.dataset.music = musicHeroOn ? "on" : "off";
+    const airadoroHeroOn = live && State.view === "airadoro" && !this.uploadActive;
+    this.islandEl.dataset.airadoro = airadoroHeroOn
+      ? (Airadoro.snapshot.paused ? "paused" : Airadoro.snapshot.phase)
+      : "off";
     this.musicBackdrop.classList.toggle("on", musicHeroOn);
     if (musicHeroOn) {
       const cover = currentArtwork(Spotify.state);
@@ -2221,7 +2225,7 @@ export class Island {
         } else if (State.mode === "hidden") {
           this.updateClosed();
         }
-      }, 250);
+      }, 120);
     } else if (!needTick && this.compactLyricTimer != null) {
       window.clearInterval(this.compactLyricTimer);
       this.compactLyricTimer = null;
