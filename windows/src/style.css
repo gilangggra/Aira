@@ -5801,6 +5801,7 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 .clip-shell {
+  position: relative;
   width: 100%;
   height: 100%;
   display: flex;
@@ -6102,8 +6103,8 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 /* ── Clipboard Enhancements (Code, Privacy Shield, Keyboard Selection) ───── */
 
 .clip-item.selected {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(56, 189, 248, 0.085);
+  border-color: rgba(56, 189, 248, 0.38);
 }
 
 .clip-kind-badge.code {
@@ -6134,6 +6135,311 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 .clip-act.on {
   color: #7dd3fc;
   background: rgba(56, 189, 248, 0.16);
+}
+
+/* ── Smart Clipboard Action Bar & QR Overlay ─────────────────────────────── */
+
+.clip-smart-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 24px;
+  overflow: hidden;
+}
+
+.clip-smart-bar[hidden] {
+  display: none;
+}
+
+.clip-smart-label {
+  font: 700 9px/1 var(--font);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 5px;
+  padding: 3px 6px;
+  flex: 0 0 auto;
+}
+
+.clip-smart-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.clip-smart-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.clip-smart-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.065);
+  color: rgba(255, 255, 255, 0.9);
+  font: 500 10px/1 var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.clip-smart-chip:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.42);
+  color: #fff;
+}
+
+.clip-smart-chip.ai {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: rgba(168, 85, 247, 0.3);
+  color: #e9d5ff;
+}
+
+.clip-smart-chip.ai:hover {
+  background: rgba(168, 85, 247, 0.28);
+  border-color: rgba(168, 85, 247, 0.48);
+  color: #fff;
+}
+
+.clip-smart-hint {
+  font: 400 9.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: rgba(255, 255, 255, 0.56);
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clip-smart-feedback {
+  font: 600 9.5px var(--font);
+  color: #4ade80;
+  flex: 0 0 auto;
+}
+
+.clip-qr-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 14px;
+  border-radius: inherit;
+  background: rgba(10, 14, 22, 0.94);
+  backdrop-filter: blur(12px);
+}
+
+.clip-qr-overlay[hidden] {
+  display: none;
+}
+
+.clip-qr-card {
+  width: 100%;
+  max-width: 390px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.clip-qr-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: stretch;
+}
+
+.clip-qr-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.clip-qr-title {
+  font: 600 11.5px var(--font);
+  color: var(--ink);
+}
+
+.clip-qr-close {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.clip-qr-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.clip-qr-box {
+  padding: 6px;
+  border-radius: 10px;
+  background: #ffffff;
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  flex: 0 0 auto;
+}
+
+.clip-qr-box svg {
+  width: 100px;
+  height: 100px;
+  display: block;
+}
+
+.clip-qr-loading {
+  font: 500 10px var(--font);
+  color: #475569;
+  padding: 6px;
+  text-align: center;
+}
+
+.clip-qr-caption {
+  font: 400 10px/1.35 var(--font);
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+.clip-thumb {
+  width: 68px;
+  height: 42px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.28);
+  flex: 0 0 auto;
+}
+
+.clip-list.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  align-content: start;
+}
+
+.clip-img-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 9px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: border-color 0.14s, background 0.14s;
+}
+
+.clip-img-tile:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.clip-img-tile.selected {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.09);
+}
+
+.clip-img-tile.copied {
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+.clip-img-tile-img {
+  width: 100%;
+  height: 78px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.35);
+  display: block;
+}
+
+.clip-img-tile-empty {
+  width: 100%;
+  height: 78px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font: 500 11px var(--font);
+}
+
+.clip-img-tile-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.clip-img-tile-dim {
+  font: 600 9.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clip-kind-pill.img {
+  background: rgba(52, 211, 153, 0.16);
+  color: #a7f3d0;
+}
+
+.clip-img-card {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.clip-img-head-acts {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.clip-img-preview {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  cursor: pointer;
 }
 
 
@@ -7771,25 +8077,32 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 .clip-footer {
-  padding-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .clip-clear-danger {
-  border: 0;
-  background: transparent;
-  color: #f87171;
-  font: 600 11px/1 var(--font);
-  padding: 4px 6px;
+  margin-left: auto;
+  height: 22px;
+  border: 1px solid rgba(248, 113, 113, 0.18);
   border-radius: 7px;
+  background: rgba(248, 113, 113, 0.08);
+  color: #fca5a5;
+  font: 600 10px/1 var(--font);
+  padding: 0 9px;
   cursor: pointer;
+  flex: 0 0 auto;
 }
 
 .clip-clear-danger:hover:not(:disabled) {
-  background: rgba(248, 113, 113, 0.14);
-  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #fecaca;
 }
 
 .clip-clear-danger:disabled {

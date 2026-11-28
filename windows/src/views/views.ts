@@ -83,6 +83,8 @@ export interface ViewActions {
   focusTask?(title: string, taskId?: string): void;
   /** Opens the AI chat view with clipboard text attached as context. */
   sendToChat?(text: string): void;
+  /** Opens the AI chat view with a local file (e.g., clipboard image PNG) attached. */
+  sendFileToChat?(name: string, path: string): void;
   /** Opens a native file picker for local file conversion. */
   pickConvertFile?(): void;
 }

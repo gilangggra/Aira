@@ -6,15 +6,23 @@ import {
   MAX_CLIPBOARD_CHARS,
   MAX_CLIPBOARD_ITEMS,
   addClipboardEntry,
+  addClipboardImageEntry,
+  cleanTrackingUrl,
   clearUnpinnedClipboard,
   countClipboardLines,
+  decodeUrlText,
   detectClipboardKind,
   filterClipboardEntries,
   formatClipboardAge,
+  getSmartClipboardActions,
+  hexToHslString,
+  hexToRgbString,
   isSensitiveClipboardText,
   maskSensitiveText,
+  parseUnixTimestamp,
   removeClipboardEntry,
   togglePinClipboardEntry,
+  tryFormatJson,
 } from "../src/core/clipboard.ts";
 
 test("detectClipboardKind classifies links, hex colors, and text", () => {
@@ -151,4 +159,80 @@ test("ClipboardStore suppresses cleared or deleted system clipboard text until n
   assert.equal(storeAfterRestart.entries.length, 0);
   storeAfterRestart.capture("brand new copy");
   assert.equal(storeAfterRestart.entries.length, 0);
+});
+
+test("smart clipboard transforms convert colors, JSON, URLs, epochs, and URL-encoded strings", () => {
+  assert.equal(hexToRgbString("#38BDF8"), "rgb(56, 189, 248)");
+  assert.equal(hexToRgbString("#fff"), "rgb(255, 255, 255)");
+  assert.equal(hexToHslString("#38BDF8"), "hsl(198, 93%, 60%)");
+  assert.equal(hexToRgbString("not-a-color"), null);
+
+  const json = tryFormatJson('{"a":1,"b":[2,3]}');
+  assert.ok(json);
+  assert.equal(json.isMultiline, false);
+  assert.equal(json.formatted, '{\n  "a": 1,\n  "b": [\n    2,\n    3\n  ]\n}');
+  assert.equal(tryFormatJson("not json"), null);
+
+  assert.equal(
+    cleanTrackingUrl("https://example.com/post?id=42&utm_source=twitter&fbclid=abc"),
+    "https://example.com/post?id=42",
+  );
+  assert.equal(cleanTrackingUrl("https://example.com/post?id=42"), null);
+
+  const ts = parseUnixTimestamp("1700000000");
+  assert.ok(ts);
+  assert.equal(ts.iso, "2023-11-14T22:13:20.000Z");
+  assert.equal(parseUnixTimestamp("12345"), null);
+
+  assert.equal(decodeUrlText("hello%20world%21"), "hello world!");
+  assert.equal(decodeUrlText("plain text"), null);
+});
+
+test("getSmartClipboardActions returns contextual actions and hides them for sensitive entries", () => {
+  const colorEntry = addClipboardEntry([], "#38BDF8", 1000)[0];
+  assert.deepEqual(
+    getSmartClipboardActions(colorEntry).map((a) => a.id),
+    ["copy-rgb", "copy-hsl"],
+  );
+
+  const jsonEntry = addClipboardEntry([], '{"name":"aira"}', 2000)[0];
+  assert.ok(getSmartClipboardActions(jsonEntry).some((a) => a.id === "format-json"));
+
+  const linkEntry = addClipboardEntry([], "https://example.com/?utm_source=x&q=1", 3000)[0];
+  assert.deepEqual(
+    getSmartClipboardActions(linkEntry).map((a) => a.id),
+    ["clean-url", "qr-code", "summarize-ai"],
+  );
+
+  const secretEntry = addClipboardEntry([], "ghp_1234567890abcdefghijklmnop", 4000)[0];
+  assert.deepEqual(getSmartClipboardActions(secretEntry), []);
+});
+
+test("image clipboard entries deduplicate, filter by images tab, and expose image smart actions", () => {
+  const payload = {
+    hash: "abc123",
+    path: "C:/temp/clip_abc123.png",
+    width: 1920,
+    height: 1080,
+    thumbDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+  };
+  let list = addClipboardEntry([], "some text", 1000);
+  list = addClipboardImageEntry(list, payload, 2000);
+  assert.equal(list.length, 2);
+  assert.equal(list[0].kind, "image");
+  assert.equal(list[0].imageWidth, 1920);
+
+  // Deduplicating same imagePath moves it to top without duplicating
+  list = addClipboardImageEntry(list, payload, 3000);
+  assert.equal(list.length, 2);
+  assert.equal(list[0].copiedAt, 3000);
+
+  const imagesOnly = filterClipboardEntries(list, "", "images");
+  assert.equal(imagesOnly.length, 1);
+  assert.equal(imagesOnly[0].imagePath, payload.path);
+
+  assert.deepEqual(
+    getSmartClipboardActions(imagesOnly[0]).map((a) => a.id),
+    ["preview-image", "save-image", "ask-ai-image"],
+  );
 });

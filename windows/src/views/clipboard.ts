@@ -3,15 +3,18 @@
 // hex color swatches, privacy pause toggle, and 1-click send to Agenda or AI Chat.
 
 import { addAgendaTask, loadAgendaTasks } from "../core/agenda";
+import { Bridge, IS_TAURI } from "../core/bridge";
 import { dayKey } from "../core/calendar";
 import {
   Clipboard,
   filterClipboardEntries,
   formatClipboardAge,
+  getSmartClipboardActions,
   isSensitiveClipboardText,
   maskSensitiveText,
   type ClipboardEntry,
   type ClipboardFilter,
+  type SmartClipboardAction,
 } from "../core/clipboard";
 import { State } from "../core/state";
 import { t, tl } from "../i18n/i18n";
@@ -83,7 +86,10 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
 
   async function copyAndCollapse(entry: ClipboardEntry) {
     actions.blip();
-    const ok = await Clipboard.copyToSystem(entry.text);
+    const ok =
+      entry.kind === "image"
+        ? await Clipboard.copyImageToSystem(entry)
+        : await Clipboard.copyToSystem(entry.text);
     if (!ok) return;
     copiedId = entry.id;
     revealedIds.clear();
@@ -98,18 +104,20 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
   function moveSelection(delta: number) {
     if (visibleItems.length === 0) return;
     selectedIdx = (selectedIdx + delta + visibleItems.length) % visibleItems.length;
-    const rows = listEl.querySelectorAll<HTMLElement>(".clip-item");
+    const rows = listEl.querySelectorAll<HTMLElement>(".clip-item, .clip-img-tile");
     rows.forEach((row, idx) => {
       const on = idx === selectedIdx;
       row.classList.toggle("selected", on);
       if (on) row.scrollIntoView({ block: "nearest" });
     });
+    renderSmartBar();
   }
 
   const filterDefs: Array<{ id: ClipboardFilter; label: ReturnType<typeof tl> }> = [
     { id: "all", label: tl("All") },
     { id: "pinned", label: tl("Pinned") },
     { id: "links", label: tl("Links") },
+    { id: "images", label: tl("Images") },
   ];
   const filterBtns = filterDefs.map((f) => {
     const btn = h("button", {
@@ -163,9 +171,237 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
   );
 
   const listEl = h("div", { class: "clip-list" });
-  const footerEl = h("div", { class: "clip-footer" }, clearBtn);
-  const shell = h("div", { class: "clip-shell" }, toolbar, listEl, footerEl);
+  const smartBarEl = h("div", { class: "clip-smart-bar" });
+  const qrOverlayEl = h("div", { class: "clip-qr-overlay", hidden: "true" });
+  const footerEl = h("div", { class: "clip-footer" }, smartBarEl, clearBtn);
+  const shell = h("div", { class: "clip-shell" }, toolbar, listEl, footerEl, qrOverlayEl);
   const el = h("div", { class: "view clip-view" }, shell);
+
+  let smartFeedback: string | null = null;
+  let smartFeedbackTimer: number | null = null;
+
+  function closeQrOverlay() {
+    qrOverlayEl.hidden = true;
+    clear(qrOverlayEl);
+  }
+
+  async function openQrOverlay(text: string) {
+    clear(qrOverlayEl);
+    qrOverlayEl.hidden = false;
+    const closeBtn = h(
+      "button",
+      {
+        type: "button",
+        class: "clip-qr-close",
+        title: tl("Close"),
+        onclick: (e: Event) => {
+          e.stopPropagation();
+          actions.blip();
+          closeQrOverlay();
+        },
+      },
+      svg(ICONS.xmark, 11),
+    );
+    const header = h(
+      "div",
+      { class: "clip-qr-head" },
+      h("span", { class: "clip-qr-title", text: t("Scan QR Code") }),
+      closeBtn,
+    );
+    const qrBox = h("div", { class: "clip-qr-box" }, h("span", { class: "clip-qr-loading", text: t("Generating…") }));
+    const caption = h("div", { class: "clip-qr-caption", text: previewText(text) });
+    const info = h("div", { class: "clip-qr-info" }, header, caption);
+    const card = h("div", { class: "clip-qr-card" }, qrBox, info);
+    qrOverlayEl.append(card);
+
+    if (!IS_TAURI) {
+      clear(qrBox);
+      qrBox.append(h("span", { class: "clip-qr-loading", text: t("QR preview available in app") }));
+      return;
+    }
+    try {
+      const svgMarkup = await Bridge.clipboardQrSvg(text.trim());
+      if (qrOverlayEl.hidden) return;
+      clear(qrBox);
+      qrBox.innerHTML = svgMarkup;
+    } catch {
+      if (qrOverlayEl.hidden) return;
+      clear(qrBox);
+      qrBox.append(h("span", { class: "clip-qr-loading", text: t("Unable to generate QR") }));
+    }
+  }
+
+  async function openImagePreviewOverlay(entry: ClipboardEntry) {
+    clear(qrOverlayEl);
+    qrOverlayEl.hidden = false;
+    const closeBtn = h(
+      "button",
+      {
+        type: "button",
+        class: "clip-qr-close",
+        title: tl("Close"),
+        onclick: (e: Event) => {
+          e.stopPropagation();
+          actions.blip();
+          closeQrOverlay();
+        },
+      },
+      svg(ICONS.xmark, 11),
+    );
+    const saveAction =
+      IS_TAURI && entry.imagePath
+        ? h(
+            "button",
+            {
+              type: "button",
+              class: "clip-smart-chip",
+              text: t("Save PNG"),
+              onclick: (e: Event) => {
+                e.stopPropagation();
+                actions.blip();
+                if (entry.imagePath) void Bridge.clipboardSaveImage(entry.imagePath);
+              },
+            },
+          )
+        : null;
+    const aiAction = entry.imagePath
+      ? h(
+          "button",
+          {
+            type: "button",
+            class: "clip-smart-chip ai",
+            text: t("Ask AI"),
+            onclick: (e: Event) => {
+              e.stopPropagation();
+              actions.blip();
+              if (entry.imagePath) actions.sendFileToChat?.(`${entry.id}.png`, entry.imagePath);
+            },
+          },
+        )
+      : null;
+    const header = h(
+      "div",
+      { class: "clip-qr-head" },
+      h("span", { class: "clip-qr-title", text: `${t("Image")} · ${entry.imageWidth ?? "?"}×${entry.imageHeight ?? "?"}` }),
+      h("div", { class: "clip-img-head-acts" }, saveAction, aiAction, closeBtn),
+    );
+    const imgEl = entry.imageThumb
+      ? (h("img", {
+          class: "clip-img-preview",
+          src: entry.imageThumb,
+          alt: entry.text,
+          onclick: (e: Event) => {
+            e.stopPropagation();
+            void copyAndCollapse(entry);
+          },
+        }) as HTMLImageElement)
+      : null;
+    qrOverlayEl.append(
+      h(
+        "div",
+        { class: "clip-img-card" },
+        header,
+        imgEl ?? h("span", { class: "clip-qr-loading", text: t("Preview unavailable") }),
+      ),
+    );
+    if (IS_TAURI && entry.imagePath && imgEl) {
+      try {
+        const fullDataUrl = await Bridge.clipboardReadImageDataUrl(entry.imagePath);
+        if (!qrOverlayEl.hidden && imgEl.isConnected) {
+          imgEl.src = fullDataUrl;
+        }
+      } catch {
+        // Keep thumbnail fallback
+      }
+    }
+  }
+
+  async function runSmartAction(entry: ClipboardEntry, act: SmartClipboardAction) {
+    actions.blip();
+    if (act.id === "qr-code") {
+      await openQrOverlay(entry.text);
+      return;
+    }
+    if (act.id === "preview-image") {
+      await openImagePreviewOverlay(entry);
+      return;
+    }
+    if (act.id === "save-image" && entry.imagePath) {
+      if (!IS_TAURI) return;
+      try {
+        await Bridge.clipboardSaveImage(entry.imagePath);
+        smartFeedback = `✓ ${t("Saved")}`;
+        if (smartFeedbackTimer != null) window.clearTimeout(smartFeedbackTimer);
+        renderSmartBar();
+        smartFeedbackTimer = window.setTimeout(() => {
+          smartFeedback = null;
+          renderSmartBar();
+        }, 1400);
+      } catch {
+        // Ignore save errors
+      }
+      return;
+    }
+    if (act.id === "ask-ai-image" && entry.imagePath) {
+      actions.sendFileToChat?.(`${entry.id}.png`, entry.imagePath);
+      return;
+    }
+    if (act.aiPrompt) {
+      actions.sendToChat?.(`${act.aiPrompt}${entry.text}`);
+      return;
+    }
+    if (act.output != null) {
+      const ok = await Clipboard.copyToSystem(act.output);
+      if (!ok) return;
+      smartFeedback = `✓ ${t("Copied")}`;
+      if (smartFeedbackTimer != null) window.clearTimeout(smartFeedbackTimer);
+      renderSmartBar();
+      smartFeedbackTimer = window.setTimeout(() => {
+        smartFeedback = null;
+        renderSmartBar();
+      }, 1200);
+    }
+  }
+
+  function renderSmartBar() {
+    clear(smartBarEl);
+    const entry = visibleItems[selectedIdx];
+    if (!entry) {
+      smartBarEl.hidden = true;
+      return;
+    }
+    const smartActions = getSmartClipboardActions(entry);
+    if (smartActions.length === 0) {
+      smartBarEl.hidden = true;
+      return;
+    }
+    smartBarEl.hidden = false;
+    smartBarEl.append(h("span", { class: "clip-smart-label", text: t("Smart") }));
+
+    const chips = h("div", { class: "clip-smart-chips" });
+    for (const act of smartActions) {
+      const chip = h(
+        "button",
+        {
+          type: "button",
+          class: act.aiPrompt ? "clip-smart-chip ai" : "clip-smart-chip",
+          title: act.hint ? `${t(act.label)} — ${act.hint}` : t(act.label),
+          onclick: (e: Event) => {
+            e.stopPropagation();
+            void runSmartAction(entry, act);
+          },
+        },
+        h("span", { text: t(act.label) }),
+        act.hint ? h("span", { class: "clip-smart-hint", text: act.hint }) : null,
+      );
+      chips.append(chip);
+    }
+    smartBarEl.append(chips);
+
+    if (smartFeedback) {
+      smartBarEl.append(h("span", { class: "clip-smart-feedback", text: smartFeedback }));
+    }
+  }
 
   el.addEventListener("keydown", (e: KeyboardEvent) => {
     if (e.key === "ArrowDown") {
@@ -183,7 +419,9 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
       void copyAndCollapse(item);
     } else if (e.key === "Escape") {
       e.stopPropagation();
-      if (searchInput.value) {
+      if (!qrOverlayEl.hidden) {
+        closeQrOverlay();
+      } else if (searchInput.value) {
         searchInput.value = "";
         query = "";
         selectedIdx = 0;
@@ -215,15 +453,19 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
 
     const badge = isMasked
       ? h("span", { class: "clip-kind-badge secret", title: tl("Sensitive") }, makeLockSvg())
-      : entry.kind === "color"
-        ? h("span", { class: "clip-swatch", style: `background:${entry.text.trim()}` })
-        : entry.kind === "link"
-          ? h("span", { class: "clip-kind-pill link" }, makeLinkSvg(), h("span", { text: tl("Link") }))
-          : entry.kind === "code"
-            ? h("span", { class: "clip-kind-pill code", text: tl("Code") })
-            : entry.pinned
-              ? h("span", { class: "clip-kind-pill pin", text: tl("Pinned") })
-              : h("span", { class: "clip-kind-pill text", text: tl("Text") });
+      : entry.kind === "image"
+        ? entry.imageThumb
+          ? h("img", { class: "clip-thumb", src: entry.imageThumb, alt: entry.text })
+          : h("span", { class: "clip-kind-pill img", text: tl("Image") })
+        : entry.kind === "color"
+          ? h("span", { class: "clip-swatch", style: `background:${entry.text.trim()}` })
+          : entry.kind === "link"
+            ? h("span", { class: "clip-kind-pill link" }, makeLinkSvg(), h("span", { text: tl("Link") }))
+            : entry.kind === "code"
+              ? h("span", { class: "clip-kind-pill code", text: tl("Code") })
+              : entry.pinned
+                ? h("span", { class: "clip-kind-pill pin", text: tl("Pinned") })
+                : h("span", { class: "clip-kind-pill text", text: tl("Text") });
 
     const meta = isCopied
       ? h("span", { class: "clip-copied-tag", text: `✓ ${t("Copied")}` })
@@ -238,11 +480,35 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
         ? "clip-preview code"
         : "clip-preview";
 
+    const displayText = isMasked
+      ? maskSensitiveText(entry.text)
+      : entry.kind === "image"
+        ? `${t("Image")} · ${entry.imageWidth ?? "?"}×${entry.imageHeight ?? "?"}`
+        : previewText(entry.text);
+
     const main = h(
       "div",
       { class: "clip-main" },
-      h("div", { class: previewCls, text: isMasked ? maskSensitiveText(entry.text) : previewText(entry.text) }),
+      h("div", { class: previewCls, text: displayText }),
     );
+
+    const previewBtn =
+      entry.kind === "image" && (entry.imageThumb || entry.imagePath)
+        ? h(
+            "button",
+            {
+              type: "button",
+              class: "clip-act",
+              title: tl("Preview"),
+              onclick: (e: Event) => {
+                e.stopPropagation();
+                actions.blip();
+                void openImagePreviewOverlay(entry);
+              },
+            },
+            svg(ICONS.eye, 11, { stroke: 1.8 }),
+          )
+        : null;
 
     const revealBtn = sensitive
       ? h(
@@ -296,44 +562,50 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
           )
         : null;
 
-    const agendaBtn = !isMasked
-      ? h(
-          "button",
-          {
-            type: "button",
-            class: "clip-act",
-            title: tl("Add to Agenda"),
-            onclick: (e: Event) => {
-              e.stopPropagation();
-              actions.blip();
-              const today = dayKey(new Date());
-              const updated = addAgendaTask(loadAgendaTasks(), today, previewText(entry.text));
-              if (updated) {
-                actions.emote?.("happy");
-                State.notify();
-              }
+    const agendaBtn =
+      !isMasked && entry.kind !== "image"
+        ? h(
+            "button",
+            {
+              type: "button",
+              class: "clip-act",
+              title: tl("Add to Agenda"),
+              onclick: (e: Event) => {
+                e.stopPropagation();
+                actions.blip();
+                const today = dayKey(new Date());
+                const updated = addAgendaTask(loadAgendaTasks(), today, previewText(entry.text));
+                if (updated) {
+                  actions.emote?.("happy");
+                  State.notify();
+                }
+              },
             },
-          },
-          svg(ICONS.calendar, 10, { stroke: 1.9 }),
-        )
-      : null;
+            svg(ICONS.calendar, 10, { stroke: 1.9 }),
+          )
+        : null;
 
-    const chatBtn = !isMasked
-      ? h(
-          "button",
-          {
-            type: "button",
-            class: "clip-act",
-            title: tl("Ask AI"),
-            onclick: (e: Event) => {
-              e.stopPropagation();
-              actions.blip();
-              actions.sendToChat?.(entry.text);
+    const chatBtn =
+      !isMasked && (entry.kind !== "image" || !!entry.imagePath)
+        ? h(
+            "button",
+            {
+              type: "button",
+              class: "clip-act",
+              title: tl("Ask AI"),
+              onclick: (e: Event) => {
+                e.stopPropagation();
+                actions.blip();
+                if (entry.kind === "image" && entry.imagePath) {
+                  actions.sendFileToChat?.(`${entry.id}.png`, entry.imagePath);
+                } else {
+                  actions.sendToChat?.(entry.text);
+                }
+              },
             },
-          },
-          svg(ICONS.bubble, 10, { stroke: 1.9 }),
-        )
-      : null;
+            svg(ICONS.bubble, 10, { stroke: 1.9 }),
+          )
+        : null;
 
     const delBtn = h(
       "button",
@@ -352,12 +624,45 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
 
     const rowCls = [
       "clip-item",
+      entry.kind === "image" ? "is-image" : "",
       isCopied ? "copied" : "",
       entry.pinned ? "pinned" : "",
       isSelected ? "selected" : "",
     ]
       .filter(Boolean)
       .join(" ");
+
+    if (filter === "images" && entry.kind === "image") {
+      const tile = h(
+        "div",
+        {
+          class: `clip-img-tile${isSelected ? " selected" : ""}${isCopied ? " copied" : ""}${entry.pinned ? " pinned" : ""}`,
+          onmouseenter: () => {
+            if (selectedIdx !== index) {
+              selectedIdx = index;
+              listEl.querySelectorAll<HTMLElement>(".clip-img-tile").forEach((r, i) => {
+                r.classList.toggle("selected", i === selectedIdx);
+              });
+              renderSmartBar();
+            }
+          },
+          onclick: () => void copyAndCollapse(entry),
+        },
+        entry.imageThumb
+          ? h("img", { class: "clip-img-tile-img", src: entry.imageThumb, alt: entry.text })
+          : h("div", { class: "clip-img-tile-empty", text: t("Image") }),
+        h(
+          "div",
+          { class: "clip-img-tile-bar" },
+          h("span", {
+            class: "clip-img-tile-dim",
+            text: isCopied ? `✓ ${t("Copied")}` : `${entry.imageWidth ?? "?"}×${entry.imageHeight ?? "?"}`,
+          }),
+          h("div", { class: "clip-actions" }, previewBtn, pinBtn, chatBtn, delBtn),
+        ),
+      );
+      return tile;
+    }
 
     const row = h(
       "div",
@@ -369,6 +674,7 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
             listEl.querySelectorAll<HTMLElement>(".clip-item").forEach((r, i) => {
               r.classList.toggle("selected", i === selectedIdx);
             });
+            renderSmartBar();
           }
         },
         onclick: () => void copyAndCollapse(entry),
@@ -376,13 +682,14 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
       badge,
       main,
       meta,
-      h("div", { class: "clip-actions" }, revealBtn, pinBtn, openBtn, agendaBtn, chatBtn, delBtn),
+      h("div", { class: "clip-actions" }, previewBtn, revealBtn, pinBtn, openBtn, agendaBtn, chatBtn, delBtn),
     );
     return row;
   }
 
   function renderList() {
     clear(listEl);
+    listEl.classList.toggle("grid", filter === "images");
     const items = filterClipboardEntries(Clipboard.entries, query, filter);
     visibleItems = items;
     if (items.length === 0) {
@@ -398,6 +705,7 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
           h("span", { text: msg }),
         ),
       );
+      renderSmartBar();
       return;
     }
     if (selectedIdx >= items.length) selectedIdx = items.length - 1;
@@ -405,6 +713,7 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
     for (let i = 0; i < items.length; i++) {
       listEl.append(renderEntry(items[i], i));
     }
+    renderSmartBar();
   }
 
   Clipboard.subscribe(() => {
@@ -417,6 +726,7 @@ export function buildClipboardView(actions: ViewActions): ViewHost {
   return {
     el,
     sync() {
+      closeQrOverlay();
       void Clipboard.refreshFromSystem();
       renderToolbar();
       renderList();

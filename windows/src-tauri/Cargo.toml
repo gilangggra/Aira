@@ -54,6 +54,7 @@ cpal = "0.18"
 # the raw DEFLATE decoder only, already in the tree through png (the same 0.8.9), so nothing new is
 # downloaded or compiled. MIT/Zlib/Apache-2.0.
 miniz_oxide = "0.8"
+png = "0.17"
 # The chat's mail merge cuts a PDF into one page per recipient and reads each page's text
 # (mail/pdf.rs), as the Mac does with PDFKit; Windows has no PDF library of its own. MIT, pure
 # Rust, default features (clock, rayon) off.
@@ -95,7 +96,7 @@ windows = { version = "0.61", features = [
   "Win32_System_LibraryLoader",
 ] }
 # The clipboard for Flow dictation, kept out of the clipboard history. MIT/Apache-2.0.
-arboard = { version = "3.6", default-features = false }
+arboard = { version = "3.6", default-features = false, features = ["image-data"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Secret Service (GNOME Keyring, KWallet) over D-Bus, encrypted in transit.
@@ -115,4 +116,4 @@ x11rb = { version = "0.13", default-features = false, features = ["xinput", "xte
 # monitor of the speakers, the Notetaker's "computer sound". Pure Rust client.
 cpal = { version = "0.18", features = ["pulseaudio"] }
 # The clipboard for Flow dictation (X11, and Wayland's data-control protocol).
-arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
+arboard = { version = "3.6", default-features = false, features = ["wayland-data-control", "image-data"] }
