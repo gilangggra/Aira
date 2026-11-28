@@ -53,8 +53,22 @@ const windowRoot = document.getElementById("hub")!;
 let root: HTMLElement = windowRoot;
 let hub: { redraw(): void; current(): PageId } | null = null;
 
+let saveTimer: number | null = null;
+
 async function save() {
+  if (saveTimer != null) {
+    window.clearTimeout(saveTimer);
+    saveTimer = null;
+  }
   await Bridge.saveSettings(settings);
+}
+
+function saveDebounced(delayMs = 150) {
+  if (saveTimer != null) window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => {
+    saveTimer = null;
+    void Bridge.saveSettings(settings);
+  }, delayMs);
 }
 
 /** A colour was picked for a pill's Mochi (see ./colors.ts): the island follows. */
@@ -1177,6 +1191,10 @@ function generalSections(): HTMLElement[] {
   volume.addEventListener("input", () => {
     settings.soundVolume = Number(volume.value);
     volumePercent.textContent = `${Math.round((settings.soundVolume / 0.2) * 100)}%`;
+    saveDebounced();
+  });
+  volume.addEventListener("change", () => {
+    settings.soundVolume = Number(volume.value);
     void save();
   });
 
@@ -1597,7 +1615,8 @@ function generalSections(): HTMLElement[] {
     | "featureAgents"
     | "featureClipboard"
     | "featureMail"
-    | "featureConvert";
+    | "featureConvert"
+    | "featureCamera";
   const makeInfoPreviewCard = (
     key: CompactInfoKey,
     titleText: string,
@@ -1925,6 +1944,26 @@ function generalSections(): HTMLElement[] {
           h("span", { class: "ni-conv-tag", text: "PNG" }),
           h("span", { class: "ni-conv-arrow", text: "→" }),
           h("span", { class: "ni-conv-tag on", text: "WEBP" }),
+        ),
+      ),
+    ),
+    makeInfoPreviewCard(
+      "featureCamera",
+      t("Camera"),
+      h(
+        "div",
+        { class: "ni-card-body ni-dock-feat" },
+        h(
+          "div",
+          { class: "ni-head" },
+          svg(ICONS.camera, 10),
+          h("span", { class: "ni-head-title", text: t("Camera") }),
+        ),
+        h(
+          "div",
+          { class: "ni-conv-row" },
+          h("span", { class: "ni-conv-tag", text: "PNG" }),
+          h("span", { class: "ni-conv-tag on", text: "REC" }),
         ),
       ),
     ),
@@ -2341,80 +2380,122 @@ async function main() {
   void onEvent<UpdateStatus>("update-status", (fresh) => updatesListener?.(fresh));
   void onEvent<Settings>("settings-changed", (s) => {
     const before = `${settings.chatProvider}|${settings.ollamaUrl}|${settings.lmstudioUrl}|${settings.customUrl}`;
+    const langBefore = settings.language;
     settings = { ...settings, ...s };
     shortcutsListener?.settingsChanged();
     generalSync?.();
     for (const redraw of declaredViews) redraw();
     const after = `${settings.chatProvider}|${settings.ollamaUrl}|${settings.lmstudioUrl}|${settings.customUrl}`;
     if (before !== after) localRedraw?.();
-    applyLanguage();
+    if (langBefore !== settings.language) applyLanguage();
   });
 }
 
 /** The Notch page being shown. */
 let notchPage: PageId = "general";
+let renderSeq = 0;
 
-/** Reads what the sections of the Notch page show and draws them. */
+const INTEGRATION_KEYS = [
+  "stripe-api-key", "github-token", "gitlab-url", "gitlab-token", "gitea-url", "gitea-token", "vercel-token",
+  "n8n-url", "n8n-api-key", "resend-api-key", "notion-api-key", "calcom-api-key",
+];
+
+/** Reads only the data needed by the active Notch page and draws its sections. */
 async function render() {
-  const status = (await Bridge.hooksStatus()) ?? {
-    installed: false, planRelayInstalled: false, settingsPath: "", hookPath: "", hookReady: false,
-  };
-  const agents = await Bridge.agentHooksList();
-
-  const hasKey = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
-  const claudeRelay = !hasKey && ((await Bridge.claudeReady()) ?? false);
-  const shortcutReport = await Bridge.shortcutsStatus();
-
-  const keys = [
-    "stripe-api-key", "github-token", "gitlab-url", "gitlab-token", "gitea-url", "gitea-token", "vercel-token",
-    "n8n-url", "n8n-api-key", "resend-api-key", "notion-api-key", "calcom-api-key",
-  ];
-  const present: Record<string, boolean> = {};
-  for (const k of keys) present[k] = (await Bridge.secretPresent(k)) ?? false;
+  const seq = ++renderSeq;
+  const page = notchPage;
 
   // A main pill this build can run, and no pill declared twice.
   settings = { ...settings, ...sanitizeDeclared(settings) };
-  const connected: Record<string, boolean> = { ...((await Bridge.agentHooksStatus()) ?? {}) };
-  for (const def of availablePills()) {
-    if (def.connect.kind === "key") {
-      connected[def.id] = present[def.connect.key] ?? (await Bridge.keyReady(def.connect.key)) ?? false;
-    }
-  }
-  /** A chat provider's key was saved or removed: its pill's row says so at once. */
-  const keyChanged = (key: string, on: boolean) => {
-    for (const def of availablePills()) {
-      if (def.connect.kind === "key" && def.connect.key === key) connected[def.id] = on;
-    }
-    for (const redraw of declaredViews) redraw();
-  };
-  const chatKeys: Record<string, boolean> = {};
-  for (const def of CLOUD) {
-    const key = providerDef(def.id).key!;
-    chatKeys[key] = (await Bridge.secretPresent(key)) ?? false;
-  }
-  const customKey = (await Bridge.secretPresent(CUSTOM_SERVER_KEY)) ?? false;
 
-  declaredViews.length = 0;
-  localRedraw = null;
-  shortcutsListener = null;
-  generalSync = null;
-  clear(root);
-  const sections: Partial<Record<PageId, () => HTMLElement[]>> = {
-    general: () => generalSections(),
-    pills: () => [activePillsSection(connected)],
-    agents: () => [claudeSection(status), agentsSection(agents), planSection(status)],
-    chat: () => [subscriptionsSection(), apiSection(hasKey, claudeRelay), chatProvidersSection(chatKeys, keyChanged), localSection(customKey)],
-    integrations: () => [integrationsSection(present), converterSection(), ...whatsappSections()],
-    phone: () => [phoneSection(settings.phoneLink ?? false, toggle, settings)],
-    shortcuts: () => [shortcutsSection(shortcutReport)],
+  const resetPageListeners = () => {
+    declaredViews.length = 0;
+    localRedraw = null;
+    shortcutsListener = null;
+    generalSync = null;
   };
-  root.append(...(sections[notchPage]?.() ?? []));
-  if (notchPage === "general") {
-    root.append(h("div", {
-      class: "hint",
-      text: t("No telemetry. Network requests only go to the services you configure yourself."),
-    }));
+
+  let pageNodes: HTMLElement[] = [];
+
+  if (page === "general") {
+    resetPageListeners();
+    pageNodes = [
+      ...generalSections(),
+      h("div", {
+        class: "hint",
+        text: t("No telemetry. Network requests only go to the services you configure yourself."),
+      }),
+    ];
+  } else if (page === "phone") {
+    resetPageListeners();
+    pageNodes = [phoneSection(settings.phoneLink ?? false, toggle, settings)];
+  } else if (page === "shortcuts") {
+    const shortcutReport = await Bridge.shortcutsStatus();
+    if (seq !== renderSeq) return;
+    resetPageListeners();
+    pageNodes = [shortcutsSection(shortcutReport)];
+  } else if (page === "agents") {
+    const [rawStatus, agents] = await Promise.all([
+      Bridge.hooksStatus(),
+      Bridge.agentHooksList(),
+    ]);
+    if (seq !== renderSeq) return;
+    resetPageListeners();
+    const status = rawStatus ?? {
+      installed: false, planRelayInstalled: false, settingsPath: "", hookPath: "", hookReady: false,
+    };
+    pageNodes = [claudeSection(status), agentsSection(agents), planSection(status)];
+  } else if (page === "pills") {
+    const keyPills = availablePills().filter((def) => def.connect.kind === "key");
+    const [agentStatus, ...keyStates] = await Promise.all([
+      Bridge.agentHooksStatus(),
+      ...keyPills.map((def) =>
+        def.connect.kind === "key"
+          ? Bridge.keyReady(def.connect.key).then((ok) => [def.id, Boolean(ok)] as const)
+          : Promise.resolve([def.id, false] as const),
+      ),
+    ]);
+    if (seq !== renderSeq) return;
+    resetPageListeners();
+    const connected: Record<string, boolean> = { ...(agentStatus ?? {}) };
+    for (const [id, ok] of keyStates) connected[id] = ok;
+    pageNodes = [activePillsSection(connected)];
+  } else if (page === "chat") {
+    const cloudDefs = CLOUD.map((def) => providerDef(def.id).key!);
+    const [hasKeyRaw, customKeyRaw, ...cloudStates] = await Promise.all([
+      Bridge.secretPresent("anthropic-api-key"),
+      Bridge.secretPresent(CUSTOM_SERVER_KEY),
+      ...cloudDefs.map((key) => Bridge.secretPresent(key).then((ok) => [key, Boolean(ok)] as const)),
+    ]);
+    const hasKey = hasKeyRaw ?? false;
+    const claudeRelay = !hasKey && ((await Bridge.claudeReady()) ?? false);
+    if (seq !== renderSeq) return;
+    resetPageListeners();
+    const chatKeys: Record<string, boolean> = {};
+    for (const [key, ok] of cloudStates) chatKeys[key] = ok;
+    const customKey = customKeyRaw ?? false;
+    const keyChanged = () => { };
+    pageNodes = [
+      subscriptionsSection(),
+      apiSection(hasKey, claudeRelay),
+      chatProvidersSection(chatKeys, keyChanged),
+      localSection(customKey),
+    ];
+  } else if (page === "integrations") {
+    const states = await Promise.all(
+      INTEGRATION_KEYS.map((k) => Bridge.secretPresent(k).then((ok) => [k, Boolean(ok)] as const)),
+    );
+    if (seq !== renderSeq) return;
+    resetPageListeners();
+    const present: Record<string, boolean> = {};
+    for (const [k, ok] of states) present[k] = ok;
+    pageNodes = [integrationsSection(present), converterSection(), ...whatsappSections()];
+  } else {
+    resetPageListeners();
   }
+
+  clear(root);
+  root.append(...pageNodes);
 }
 
 void main();

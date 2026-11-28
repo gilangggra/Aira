@@ -226,6 +226,7 @@ export class Island {
   private wasInIsland = false;
   /** A reply is being typed in a card (WhatsApp): the island stays open. */
   private holdingOpen = false;
+  private volumeSaveTimer: number | null = null;
   /** Last shape handed to Rust for the click-through test. */
   private pushedRect = { x: -1, y: -1, w: -1, h: -1 };
 
@@ -387,7 +388,11 @@ export class Island {
       setVolume: (v) => {
         State.settings.soundVolume = v;
         Sound.setVolume(v);
-        void Bridge.saveSettings(State.settings);
+        if (this.volumeSaveTimer != null) window.clearTimeout(this.volumeSaveTimer);
+        this.volumeSaveTimer = window.setTimeout(() => {
+          this.volumeSaveTimer = null;
+          void Bridge.saveSettings(State.settings);
+        }, 150);
         State.notify();
       },
       setAutoClose: (s) => {
@@ -556,6 +561,8 @@ export class Island {
           if (me.button === 0) {
             Sound.play("click");
             State.setFocus(AIRADORO_ID);
+            this.fsm.userInteracted();
+            this.fsm.forceHome();
             this.expand("airadoro");
           }
         },
@@ -578,6 +585,8 @@ export class Island {
           if (me.button === 0) {
             Sound.play("click");
             State.setFocus(SPOTIFY_ID);
+            this.fsm.userInteracted();
+            this.fsm.forceHome();
             this.expand("music");
           }
         },
@@ -789,10 +798,14 @@ export class Island {
     if (view === "clipboard" && State.settings.featureClipboard === false) return "overview";
     if (view === "mail" && State.settings.featureMail === false) return "overview";
     if (view === "convert" && State.settings.featureConvert === false) return "overview";
+    if (view === "camera" && State.settings.featureCamera === false) return "overview";
     return view;
   }
 
   expand(view: IslandViewName) {
+    if (view !== "greeting" && this.fsm.state !== "home") {
+      this.fsm.forceHome();
+    }
     view = this.allowedView(view);
     this.stopSequenceIfLeaving(view);
     if (view !== "overview") closePlanCard();
@@ -827,6 +840,7 @@ export class Island {
       this.foldApproval();
       return;
     }
+    this.holdingOpen = false;
     State.isPinned = false;
     this.fsm.pinned = false;
     // Drive the state machine rather than the mode: setting the mode behind its
@@ -834,6 +848,11 @@ export class Island {
     // island then did nothing — the island could never be reopened.
     if (this.isSlimShape) this.fsm.forceHidden();
     else this.fsm.forcePetit();
+    // Safety fallback: if State.mode was expanded while FSM was out of sync, force collapse.
+    if (State.mode === "expanded") {
+      this.setMode(this.isSlimShape ? "hidden" : "compact");
+      State.notify();
+    }
   }
 
   /** Alert from the hook server: open on this view. Pinned alerts never auto-close. */

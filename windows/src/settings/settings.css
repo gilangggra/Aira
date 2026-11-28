@@ -657,7 +657,7 @@ html[dir="rtl"] :is(.diff, .path, .keycap, input[type="password"], input[type="t
   top: 0;
   width: 64%;
   height: 5px;
-  border-top: 0;
+  border: 0;
   border-radius: 0 0 6px 6px;
   background: #000000;
   box-shadow: 0 1px 6px rgba(147, 197, 253, 0.35);

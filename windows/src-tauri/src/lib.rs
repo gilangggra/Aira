@@ -23,6 +23,7 @@ mod i18n;
 mod identity;
 mod integrations;
 mod calcom;
+mod camera;
 mod island;
 mod launch;
 mod local_chat;
@@ -936,6 +937,7 @@ pub fn run() {
         .manage(Chat::default())
         .manage(shortcuts::Registry::default())
         .manage(recap::load())
+        .manage(camera::CameraStore::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             mail::mail_refresh,
@@ -1059,6 +1061,8 @@ pub fn run() {
             recap::recap_clear,
             recap::recap_save_png,
             recap::recap_reveal_saved,
+            camera::camera_save_capture,
+            camera::camera_reveal_saved,
             weather::fetch_weather,
             weather::search_weather_city,
             weather::detect_weather_location,

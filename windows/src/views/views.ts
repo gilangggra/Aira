@@ -26,6 +26,7 @@ import { buildUpdate } from "./update";
 import { buildWhatsNew } from "./whatsnew";
 import { buildLaunch } from "./launch";
 import { buildAgendaView, buildReminderView } from "./agenda";
+import { buildCameraView } from "./camera";
 import { buildClipboardView } from "./clipboard";
 import { buildConvertView } from "./convert";
 import { buildWeatherView } from "./weather";
@@ -218,6 +219,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
   dockNotes.append(h("i", { class: "tab-dot" }));
   const dockMail = dockTab(ICONS.envelope, tl("Mail"), () => go("mail"));
   const dockConvert = dockTab(ICONS.convert, tl("Convert"), () => go("convert"));
+  const dockCamera = dockTab(ICONS.camera, tl("Camera"), () => go("camera"));
 
   const gearBtn = h(
     "button",
@@ -246,7 +248,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
   const dockEl = h(
     "div",
     { id: "dock" },
-    h("div", { class: "dock-tabs" }, dockPlus, dockHome, dockChat, dockMusic, dockWeather, dockLaunch, dockClips, dockNotes, dockMail, dockConvert),
+    h("div", { class: "dock-tabs" }, dockPlus, dockHome, dockChat, dockMusic, dockWeather, dockLaunch, dockClips, dockNotes, dockMail, dockConvert, dockCamera),
     h("div", { class: "dock-actions" }, soundBtn, gearBtn, closeBtn),
   );
 
@@ -287,6 +289,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
       const clipsOn = State.settings.featureClipboard !== false;
       const mailOn = State.settings.featureMail !== false;
       const convertOn = State.settings.featureConvert !== false;
+      const cameraOn = State.settings.featureCamera !== false;
       dockPlus.style.display = uploadOn ? "" : "none";
       dockChat.style.display = chatOn ? "" : "none";
       dockMusic.style.display = musicOn ? "" : "none";
@@ -296,6 +299,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
       dockNotes.style.display = agendaOn ? "" : "none";
       dockMail.style.display = mailOn ? "" : "none";
       dockConvert.style.display = convertOn ? "" : "none";
+      dockCamera.style.display = cameraOn ? "" : "none";
 
       dockPlus.classList.toggle("on", v === "upload");
       dockHome.classList.toggle("on", v === "overview" || v === "empty");
@@ -307,6 +311,7 @@ export function buildHeader(actions: ViewActions): ViewHeader {
       dockNotes.classList.toggle("on", v === "agenda");
       dockMail.classList.toggle("on", v === "mail");
       dockConvert.classList.toggle("on", v === "convert");
+      dockCamera.classList.toggle("on", v === "camera");
 
       const todayPending = agendaOn ? pendingCountForDate(loadAgendaTasks(), dayKey(now)) : 0;
       dockNotes.classList.toggle("has-pending", todayPending > 0);
@@ -1298,6 +1303,7 @@ export function buildViews(
   map.set("uploading", buildUploading());
   map.set("choose", buildChoose(actions));
   map.set("convert", buildConvertView(actions));
+  map.set("camera", buildCameraView(actions));
   map.set("recap", buildRecap(actions));
   map.set("wardrobe", buildWardrobe(actions));
   map.set("update", buildUpdate());

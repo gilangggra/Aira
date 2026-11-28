@@ -142,8 +142,8 @@ body {
   --island-bg:
     radial-gradient(ellipse 82% 90% at 16% 14%, var(--phase-grad-1, transparent) 0%, transparent 68%),
     radial-gradient(ellipse 80% 85% at 86% 84%, var(--phase-grad-2, transparent) 0%, transparent 70%),
-    linear-gradient(180deg, rgba(22, 25, 32, 0.90) 0%, rgba(12, 14, 18, 0.95) 100%);
-  --island-ear: rgba(22, 25, 32, 0.90);
+    linear-gradient(180deg, rgba(22, 25, 32, var(--glass-tint, 0.90)) 0%, rgba(12, 14, 18, var(--glass-tint-bot, 0.95)) 100%);
+  --island-ear: rgba(22, 25, 32, var(--glass-tint, 0.90));
 }
 
 #island[data-style="translucent"][data-phase]:not([data-music="on"]):not([data-weather="on"]) {
@@ -4262,10 +4262,11 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   display: flex;
   flex-direction: column;
   gap: 3px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 12px;
-  padding: 7px 8px;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 0;
+  padding: 6px 12px 6px 4px;
 }
 
 .agenda-cal-nav {
@@ -4375,10 +4376,10 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 12px;
-  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 6px 4px 6px 2px;
 }
 
 .agenda-tasks-head {
@@ -4508,8 +4509,8 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 .agenda-item.focusing {
-  background: rgba(255, 255, 255, 0.07);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  background: rgba(56, 189, 248, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.24);
 }
 
 .agenda-focus {
@@ -4518,12 +4519,12 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   color: rgba(255, 255, 255, 0.65);
   height: 18px;
   min-width: 18px;
-  border-radius: 5px;
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 0 4px;
+  padding: 0 5px;
   cursor: pointer;
   opacity: 0.78;
   flex: 0 0 auto;
@@ -4536,14 +4537,14 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 .agenda-focus:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.18);
 }
 
 .agenda-focus.on {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-  padding: 0 6px;
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+  padding: 0 7px;
 }
 
 .agenda-focus-clock {
@@ -6532,10 +6533,14 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 
 .agenda-cal,
 .agenda-tasks {
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.agenda-cal {
+  border-right: 1px solid rgba(255, 255, 255, 0.065);
 }
 
 .agenda-month-btn {
@@ -7036,20 +7041,11 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   padding: 6px 14px 10px;
 }
 
-#island[data-style="glass"] .card {
-  background: rgba(255, 255, 255, 0.065);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
 #island[data-style="glass"] .card.wash::after {
   opacity: 0.9;
 }
 
-#island[data-style="translucent"] .card,
-#island[data-style="translucent"] .dash-card,
-#island[data-style="translucent"] .agenda-cal,
-#island[data-style="translucent"] .agenda-tasks {
+#island[data-style="translucent"] .dash-card {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.1);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
@@ -7059,10 +7055,7 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   opacity: 0.72;
 }
 
-#island[data-style="solid"] .card,
-#island[data-style="solid"] .dash-card,
-#island[data-style="solid"] .agenda-cal,
-#island[data-style="solid"] .agenda-tasks {
+#island[data-style="solid"] .dash-card {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.085);
   box-shadow: none;
@@ -7734,6 +7727,7 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   border-radius: 0;
   background: transparent;
   border: none;
+  box-shadow: none;
 }
 
 .clip-kind-pill {
@@ -7809,9 +7803,10 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 }
 
 .agenda-cal {
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.065);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.065);
 }
 
 .agenda-summary {
@@ -9465,6 +9460,16 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.airadoro-task-pill.clickable {
+  cursor: pointer;
+}
+
+.airadoro-task-pill.clickable:hover {
+  background: rgba(14, 165, 233, 0.22);
+  border-color: rgba(56, 189, 248, 0.42);
 }
 
 .airadoro-view-controls {
@@ -9511,4 +9516,233 @@ html[data-dir="rtl"] #views :is(.bubble, .reply .md-p, .reply .md-h, .reply .md-
 
 .airadoro-action-btn.secondary:hover {
   background: rgba(255, 255, 255, 0.14);
+}
+
+
+/* ── Quick Camera Mirror ──────────────────────────────────────────────────── */
+
+.camera-view {
+  height: 100%;
+  padding: 2px 2px 4px;
+  box-sizing: border-box;
+}
+
+.camera-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(8, 10, 14, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.camera-video.mirrored {
+  transform: scaleX(-1);
+}
+
+.camera-flash {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.camera-flash.on {
+  animation: camera-flash-pulse 0.28s ease-out forwards;
+}
+
+@keyframes camera-flash-pulse {
+  0% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.camera-top-hud {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.camera-top-hud > * {
+  pointer-events: auto;
+}
+
+.camera-rec-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: rgba(15, 18, 24, 0.72);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #fecdd3;
+  font: 600 10.5px/1 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.camera-rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f43f5e;
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.9);
+  animation: camera-rec-blink 1s ease-in-out infinite;
+}
+
+@keyframes camera-rec-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.camera-toast,
+.camera-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 18, 24, 0.7);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.9);
+  font: 500 10.5px/1 var(--font);
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.camera-toast:hover,
+.camera-pill-btn:hover {
+  background: rgba(28, 34, 44, 0.88);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.camera-bottom-hud {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(12, 15, 20, 0.68);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.camera-ctrl-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, transform 0.1s ease;
+}
+
+.camera-ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.camera-ctrl-btn.on {
+  background: rgba(56, 189, 248, 0.24);
+  color: #7dd3fc;
+}
+
+.camera-ctrl-btn.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.camera-shutter-btn,
+.camera-record-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  background: transparent;
+  padding: 3px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.15s ease;
+}
+
+.camera-shutter-btn:hover,
+.camera-record-btn:hover {
+  transform: scale(1.06);
+}
+
+.camera-shutter-btn:active,
+.camera-record-btn:active {
+  transform: scale(0.94);
+}
+
+.camera-shutter-core {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.camera-record-btn {
+  border-color: rgba(244, 63, 94, 0.75);
+}
+
+.camera-record-core {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #f43f5e;
+  transition: border-radius 0.18s ease, transform 0.18s ease;
+}
+
+.camera-record-btn.recording .camera-record-core {
+  border-radius: 5px;
+  transform: scale(0.58);
+}
+
+.camera-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.72);
+  font: 500 12px/1.35 var(--font);
 }

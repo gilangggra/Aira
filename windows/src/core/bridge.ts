@@ -474,6 +474,11 @@ export const Bridge = {
   /** Opens the folder of the image saved last. */
   recapRevealSaved: () => call<void>("recap_reveal_saved"),
 
+  // ── Quick Camera Mirror (src-tauri/src/camera.rs) ─────────────────────────
+  cameraSaveCapture: (data: string, stamp: string, ext: string) =>
+    callOrThrow<string>("camera_save_capture", { data, stamp, ext }),
+  cameraRevealSaved: () => call<void>("camera_reveal_saved"),
+
   // ── Mochi on the desktop (src-tauri/src/desktop.rs) ───────────────────────
   desktopInfo: () => call<DesktopInfo>("desktop_mochi_info"),
   /** Dragged out of the island: (x, y) is the pointer in island-window coordinates. */
