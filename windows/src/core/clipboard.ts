@@ -1,9 +1,10 @@
 // Clipboard history state, smart content classification, deduplication, and local persistence.
 
-import { Bridge, IS_TAURI } from "./bridge";
+import { N_ } from "../i18n/i18n";
+import { Bridge, IS_TAURI, type ClipboardImagePayload } from "./bridge";
 
-export type ClipboardKind = "text" | "link" | "color" | "code";
-export type ClipboardFilter = "all" | "pinned" | "links";
+export type ClipboardKind = "text" | "link" | "color" | "code" | "image";
+export type ClipboardFilter = "all" | "pinned" | "links" | "images";
 
 export interface ClipboardEntry {
   id: string;
@@ -12,6 +13,10 @@ export interface ClipboardEntry {
   pinned: boolean;
   copiedAt: number;
   sensitive?: boolean;
+  imagePath?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  imageThumb?: string;
 }
 
 export const MAX_CLIPBOARD_ITEMS = 30;
@@ -68,6 +73,263 @@ export function maskSensitiveText(raw: string): string {
 export function countClipboardLines(raw: string): number {
   if (!raw) return 0;
   return raw.split(/\r?\n/).length;
+}
+
+const TRACKING_QUERY_PARAMS = new Set([
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "utm_id",
+  "fbclid",
+  "gclid",
+  "dclid",
+  "msclkid",
+  "mc_cid",
+  "mc_eid",
+  "igshid",
+  "si",
+  "ref_src",
+  "ref_url",
+  "spm",
+]);
+
+export function parseHexColor(raw: string): { r: number; g: number; b: number; a?: number } | null {
+  const trimmed = raw.trim();
+  if (!HEX_COLOR_RE.test(trimmed)) return null;
+  const hex = trimmed.slice(1);
+  if (hex.length === 3 || hex.length === 4) {
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    if (hex.length === 4) {
+      const a = Math.round((parseInt(hex[3] + hex[3], 16) / 255) * 100) / 100;
+      return { r, g, b, a };
+    }
+    return { r, g, b };
+  }
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  if (hex.length === 8) {
+    const a = Math.round((parseInt(hex.slice(6, 8), 16) / 255) * 100) / 100;
+    return { r, g, b, a };
+  }
+  return { r, g, b };
+}
+
+export function hexToRgbString(raw: string): string | null {
+  const c = parseHexColor(raw);
+  if (!c) return null;
+  return c.a !== undefined ? `rgba(${c.r}, ${c.g}, ${c.b}, ${c.a})` : `rgb(${c.r}, ${c.g}, ${c.b})`;
+}
+
+export function hexToHslString(raw: string): string | null {
+  const c = parseHexColor(raw);
+  if (!c) return null;
+  const r = c.r / 255;
+  const g = c.g / 255;
+  const b = c.b / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+  const hd = Math.round(h * 360);
+  const sp = Math.round(s * 100);
+  const lp = Math.round(l * 100);
+  return c.a !== undefined ? `hsla(${hd}, ${sp}%, ${lp}%, ${c.a})` : `hsl(${hd}, ${sp}%, ${lp}%)`;
+}
+
+export function tryFormatJson(
+  raw: string,
+): { formatted: string; minified: string; isMultiline: boolean } | null {
+  const trimmed = raw.trim();
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    return {
+      formatted: JSON.stringify(parsed, null, 2),
+      minified: JSON.stringify(parsed),
+      isMultiline: trimmed.includes("\n"),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function cleanTrackingUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!/^https?:\/\/\S+$/i.test(trimmed)) return null;
+  try {
+    const u = new URL(trimmed);
+    let removed = false;
+    for (const key of [...u.searchParams.keys()]) {
+      if (TRACKING_QUERY_PARAMS.has(key.toLowerCase())) {
+        u.searchParams.delete(key);
+        removed = true;
+      }
+    }
+    return removed ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function parseUnixTimestamp(raw: string): { iso: string; local: string } | null {
+  const trimmed = raw.trim();
+  if (!/^\d{10}(?:\d{3})?$/.test(trimmed)) return null;
+  const num = Number(trimmed);
+  const ms = trimmed.length === 10 ? num * 1000 : num;
+  if (ms < 946_684_800_000 || ms > 4_102_444_800_000) return null;
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return null;
+  return { iso: d.toISOString(), local: d.toLocaleString() };
+}
+
+export function decodeUrlText(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!/%[0-9A-Fa-f]{2}/.test(trimmed)) return null;
+  try {
+    const decoded = decodeURIComponent(trimmed);
+    return decoded !== trimmed ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+export type SmartClipboardActionId =
+  | "format-json"
+  | "minify-json"
+  | "copy-rgb"
+  | "copy-hsl"
+  | "clean-url"
+  | "qr-code"
+  | "decode-url"
+  | "epoch-date"
+  | "explain-code"
+  | "summarize-ai"
+  | "translate-ai"
+  | "preview-image"
+  | "save-image"
+  | "ask-ai-image";
+
+export interface SmartClipboardAction {
+  id: SmartClipboardActionId;
+  label: string;
+  output?: string;
+  hint?: string;
+  aiPrompt?: string;
+}
+
+/**
+ * Returns contextual 1-click smart actions for a clipboard entry based on its content.
+ */
+export function getSmartClipboardActions(entry: ClipboardEntry): SmartClipboardAction[] {
+  if (entry.sensitive) return [];
+  if (entry.kind === "image") {
+    const acts: SmartClipboardAction[] = [];
+    if (entry.imageThumb || entry.imagePath) {
+      acts.push({ id: "preview-image", label: N_("Preview") });
+    }
+    if (entry.imagePath) {
+      acts.push({ id: "save-image", label: N_("Save PNG") });
+      acts.push({ id: "ask-ai-image", label: N_("Ask AI") });
+    }
+    return acts;
+  }
+  const trimmed = entry.text.trim();
+  if (!trimmed) return [];
+
+  const actions: SmartClipboardAction[] = [];
+
+  if (entry.kind === "color") {
+    const rgb = hexToRgbString(trimmed);
+    const hsl = hexToHslString(trimmed);
+    if (rgb) actions.push({ id: "copy-rgb", label: N_("Copy RGB"), output: rgb, hint: rgb });
+    if (hsl) actions.push({ id: "copy-hsl", label: N_("Copy HSL"), output: hsl, hint: hsl });
+    return actions;
+  }
+
+  const json = tryFormatJson(trimmed);
+  if (json) {
+    if (json.isMultiline) {
+      if (json.minified !== trimmed) {
+        actions.push({ id: "minify-json", label: N_("Minify JSON"), output: json.minified });
+      }
+      if (json.formatted !== trimmed) {
+        actions.push({ id: "format-json", label: N_("Format JSON"), output: json.formatted });
+      }
+    } else {
+      if (json.formatted !== trimmed) {
+        actions.push({ id: "format-json", label: N_("Format JSON"), output: json.formatted });
+      }
+      if (json.minified !== trimmed) {
+        actions.push({ id: "minify-json", label: N_("Minify JSON"), output: json.minified });
+      }
+    }
+  }
+
+  if (entry.kind === "link") {
+    const cleaned = cleanTrackingUrl(trimmed);
+    if (cleaned) {
+      actions.push({ id: "clean-url", label: N_("Clean URL"), output: cleaned });
+    }
+    if (trimmed.length <= 2000) {
+      actions.push({ id: "qr-code", label: N_("QR Code") });
+    }
+    const decoded = decodeUrlText(trimmed);
+    if (decoded) {
+      actions.push({ id: "decode-url", label: N_("Decode URL"), output: decoded });
+    }
+    actions.push({ id: "summarize-ai", label: N_("Summarize"), aiPrompt: "Summarize this link:\n\n" });
+    return actions;
+  }
+
+  const epoch = parseUnixTimestamp(trimmed);
+  if (epoch) {
+    actions.push({ id: "epoch-date", label: N_("Copy Date"), output: epoch.iso, hint: epoch.local });
+  }
+
+  const decoded = decodeUrlText(trimmed);
+  if (decoded) {
+    actions.push({ id: "decode-url", label: N_("Decode URL"), output: decoded });
+  }
+
+  if (entry.kind === "code") {
+    actions.push({ id: "explain-code", label: N_("Explain Code"), aiPrompt: "Explain this code:\n\n" });
+    return actions;
+  }
+
+  if (trimmed.length <= 1000) {
+    actions.push({ id: "qr-code", label: N_("QR Code") });
+  }
+  if (trimmed.length >= 80 || trimmed.includes("\n")) {
+    actions.push({ id: "summarize-ai", label: N_("Summarize"), aiPrompt: "Summarize this:\n\n" });
+  }
+  if (trimmed.length >= 4) {
+    actions.push({ id: "translate-ai", label: N_("Translate"), aiPrompt: "Translate this:\n\n" });
+  }
+
+  return actions;
 }
 
 function isLikelyCode(trimmed: string): boolean {
@@ -206,6 +468,55 @@ export function addClipboardEntry(
   return next;
 }
 
+/**
+ * Adds a clipboard image entry with deduplication by imagePath/hash and bounded retention.
+ */
+export function addClipboardImageEntry(
+  entries: readonly ClipboardEntry[],
+  payload: ClipboardImagePayload,
+  now = Date.now(),
+): ClipboardEntry[] {
+  if (!payload.path || !payload.thumbDataUrl) return [...entries];
+  const label = `Image ${payload.width}×${payload.height}`;
+
+  let existing: ClipboardEntry | undefined;
+  const pinned: ClipboardEntry[] = [];
+  const unpinned: ClipboardEntry[] = [];
+  for (const e of entries) {
+    if (e.kind === "image" && e.imagePath === payload.path) {
+      existing = e;
+      continue;
+    }
+    if (e.pinned) pinned.push(e);
+    else unpinned.push(e);
+  }
+
+  const entry: ClipboardEntry = existing
+    ? { ...existing, copiedAt: now, imageThumb: payload.thumbDataUrl }
+    : {
+        id: makeEntryId(now),
+        text: label,
+        kind: "image",
+        pinned: false,
+        copiedAt: now,
+        imagePath: payload.path,
+        imageWidth: payload.width,
+        imageHeight: payload.height,
+        imageThumb: payload.thumbDataUrl,
+      };
+
+  if (entry.pinned) pinned.unshift(entry);
+  else unpinned.unshift(entry);
+
+  const unpinnedLimit = Math.max(0, MAX_CLIPBOARD_ITEMS - pinned.length);
+  const next = [...pinned, ...unpinned.slice(0, unpinnedLimit)].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return b.copiedAt - a.copiedAt;
+  });
+  saveClipboardEntries(next);
+  return next;
+}
+
 export function togglePinClipboardEntry(entries: readonly ClipboardEntry[], id: string): ClipboardEntry[] {
   let changed = false;
   const next = entries.map((e) => {
@@ -244,6 +555,7 @@ export function filterClipboardEntries(
     .filter((e) => {
       if (filter === "pinned" && !e.pinned) return false;
       if (filter === "links" && e.kind !== "link") return false;
+      if (filter === "images" && e.kind !== "image") return false;
       if (q && !e.text.toLowerCase().includes(q)) return false;
       return true;
     })
@@ -317,7 +629,50 @@ export class ClipboardStore {
     if (this.paused) return;
     if (IS_TAURI) {
       const text = await Bridge.clipboardReadText();
-      if (text) this.capture(text);
+      if (text) {
+        this.capture(text);
+        return;
+      }
+      const img = await Bridge.clipboardReadImage();
+      if (img) this.captureImage(img);
+    }
+  }
+
+  captureImage(payload: ClipboardImagePayload) {
+    if (this.paused) return;
+    if (!payload.path || !payload.thumbDataUrl) return;
+    if (this.suppressedTexts.has(payload.path)) return;
+    if (this.suppressedTexts.size > 0) {
+      this.suppressedTexts.clear();
+      saveSuppressedText(null);
+    }
+    const prevTop = this.entries[0];
+    if (prevTop && prevTop.kind === "image" && prevTop.imagePath === payload.path && Date.now() - prevTop.copiedAt < 1000) {
+      return;
+    }
+    this.entries = addClipboardImageEntry(this.entries, payload);
+    this.emit();
+  }
+
+  async copyImageToSystem(entry: ClipboardEntry): Promise<boolean> {
+    if (entry.kind !== "image" || !entry.imagePath) return false;
+    if (this.suppressedTexts.delete(entry.imagePath) && this.suppressedTexts.size === 0) {
+      saveSuppressedText(null);
+    }
+    if (!IS_TAURI) return false;
+    try {
+      await Bridge.clipboardWriteImage(entry.imagePath);
+      this.entries = addClipboardImageEntry(this.entries, {
+        hash: "",
+        path: entry.imagePath,
+        width: entry.imageWidth ?? 0,
+        height: entry.imageHeight ?? 0,
+        thumbDataUrl: entry.imageThumb ?? "",
+      });
+      this.emit();
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -352,8 +707,12 @@ export class ClipboardStore {
   remove(id: string) {
     const target = this.entries.find((e) => e.id === id);
     if (target) {
-      this.suppressedTexts.add(target.text);
-      saveSuppressedText(target.text);
+      const key = target.kind === "image" && target.imagePath ? target.imagePath : target.text;
+      this.suppressedTexts.add(key);
+      saveSuppressedText(key);
+      if (IS_TAURI && target.kind === "image" && target.imagePath) {
+        void Bridge.clipboardDeleteImage(target.imagePath);
+      }
     }
     this.entries = removeClipboardEntry(this.entries, id);
     this.emit();
@@ -362,10 +721,15 @@ export class ClipboardStore {
   clearUnpinned() {
     const unpinned = this.entries.filter((e) => !e.pinned);
     for (const item of unpinned) {
-      this.suppressedTexts.add(item.text);
+      const key = item.kind === "image" && item.imagePath ? item.imagePath : item.text;
+      this.suppressedTexts.add(key);
+      if (IS_TAURI && item.kind === "image" && item.imagePath) {
+        void Bridge.clipboardDeleteImage(item.imagePath);
+      }
     }
     if (unpinned.length > 0) {
-      saveSuppressedText(unpinned[0].text);
+      const first = unpinned[0];
+      saveSuppressedText(first.kind === "image" && first.imagePath ? first.imagePath : first.text);
     }
     this.entries = clearUnpinnedClipboard(this.entries);
     this.emit();

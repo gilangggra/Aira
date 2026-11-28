@@ -441,6 +441,12 @@ export class Island {
         };
         this.setView("prompt");
       },
+      sendFileToChat: (name, path) => {
+        State.droppedFile = { name, path };
+        State.promptContext = { kind: "file", name, path };
+        void Bridge.chatReset();
+        this.setView("prompt");
+      },
       pickConvertFile: () => {
         void this.pickFileForConvert();
       },
@@ -1622,6 +1628,10 @@ export class Island {
 
     void onDragDrop((e) => this.onDragDrop(e));
     void onEvent<string>("clipboard-text", (text) => Clipboard.capture(text));
+    void onEvent<{ hash: string; path: string; width: number; height: number; thumbDataUrl: string }>(
+      "clipboard-image",
+      (img) => Clipboard.captureImage(img),
+    );
     if (Clipboard.paused) void Bridge.clipboardSetPaused(true);
 
     // Outside Tauri (plain browser) drive the cursor from DOM events so the

@@ -569,7 +569,21 @@ export const Bridge = {
   clipboardReadText: () => call<string | null>("clipboard_read_text"),
   clipboardWriteText: (text: string) => call<void>("clipboard_write_text", { text }),
   clipboardSetPaused: (paused: boolean) => call<void>("clipboard_set_paused", { paused }),
+  clipboardQrSvg: (text: string) => callOrThrow<string>("clipboard_qr_svg", { text }),
+  clipboardReadImage: () => call<ClipboardImagePayload | null>("clipboard_read_image"),
+  clipboardWriteImage: (path: string) => callOrThrow<void>("clipboard_write_image", { path }),
+  clipboardSaveImage: (path: string) => callOrThrow<string>("clipboard_save_image", { path }),
+  clipboardDeleteImage: (path: string) => call<void>("clipboard_delete_image", { path }),
+  clipboardReadImageDataUrl: (path: string) => callOrThrow<string>("clipboard_read_image_data_url", { path }),
 };
+
+export interface ClipboardImagePayload {
+  hash: string;
+  path: string;
+  width: number;
+  height: number;
+  thumbDataUrl: string;
+}
 
 export type SpotifyAction = "playPause" | "next" | "previous" | "seek" | "shuffle" | "repeat" | "volume";
 
