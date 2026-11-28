@@ -150,6 +150,7 @@ export interface Settings {
   featureClipboard?: boolean;
   featureMail?: boolean;
   featureConvert?: boolean;
+  featureCamera?: boolean;
   absenceInterval: number;
   /** Declared pills next to the main one (at most 4), in the order they were added. */
   activeIntegrations: string[];
@@ -265,6 +266,7 @@ export const DEFAULT_SETTINGS: Settings = {
   featureClipboard: true,
   featureMail: true,
   featureConvert: true,
+  featureCamera: true,
   absenceInterval: 180,
   activeIntegrations: [
     "integration_resend", "integration_n8n", "integration_vercel", "integration_github",

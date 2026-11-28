@@ -587,10 +587,14 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
             {
               type: "button",
               class: isFocusing ? "agenda-focus on" : "agenda-focus",
-              title: t("Start"),
+              title: isFocusing ? "Airadoro" : tl("Focus"),
               onclick: () => {
                 actions.blip();
-                actions.focusTask?.(task.title, task.id);
+                if (isFocusing) {
+                  actions.setView("airadoro");
+                } else {
+                  actions.focusTask?.(task.title, task.id);
+                }
               },
             },
             svg(ICONS.timer, 11),
@@ -655,10 +659,24 @@ export function buildAgendaView(actions: ViewActions): ViewHost {
     }
   }
 
+  let wasAgendaOpen = false;
+  State.subscribe(() => {
+    if (State.mode !== "expanded" || State.view !== "agenda") {
+      wasAgendaOpen = false;
+    }
+  });
+
   return {
     el,
     sync() {
       today = new Date();
+      const isAgendaOpen = State.mode === "expanded" && State.view === "agenda";
+      if (isAgendaOpen && !wasAgendaOpen) {
+        wasAgendaOpen = true;
+        month = new Date(today.getFullYear(), today.getMonth(), 1);
+        selectedDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        editingId = null;
+      }
       tasks = loadAgendaTasks();
       renderCalendar();
       renderTasks();
@@ -710,6 +728,23 @@ export function buildReminderView(actions: ViewActions): ViewHost {
     },
   });
 
+  const focusReminderBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "btn secondary",
+      onclick: () => {
+        const rem = State.activeReminder;
+        if (!rem) return;
+        actions.blip();
+        State.activeReminder = null;
+        actions.focusTask?.(rem.title, rem.id);
+      },
+    },
+    svg(ICONS.timer, 12),
+    h("span", { text: tl("Focus") }),
+  );
+
   const openAgendaBtn = h("button", {
     type: "button",
     class: "link-btn",
@@ -732,7 +767,7 @@ export function buildReminderView(actions: ViewActions): ViewHost {
       badgeTime,
     ),
     titleEl,
-    h("div", { class: "actions-row reminder-actions" }, doneBtn, snoozeBtn, openAgendaBtn),
+    h("div", { class: "actions-row reminder-actions" }, doneBtn, focusReminderBtn, snoozeBtn, openAgendaBtn),
   );
 
   const el = h("div", { class: "view" }, h("div", { class: "card" }, body));

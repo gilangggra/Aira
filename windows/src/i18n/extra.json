@@ -10413,6 +10413,21 @@
       "tr": "Çentikte hangi özelliklerin ve canlı bilgilerin etkin olacağını seçin.",
       "ko": "노치에서 활성화할 기능과 실시간 정보를 선택하세요.",
       "ja": "ノッチで有効にする機能とライブ情報を選択します。"
+    },
+    "Camera": {
+      "zh-Hans": "相机",
+      "hi": "कैमरा",
+      "es": "Cámara",
+      "ar": "الكاميرا",
+      "fr": "Caméra",
+      "bn": "ক্যামেরা",
+      "pt-BR": "Câmera",
+      "ru": "Камера",
+      "id": "Kamera",
+      "de": "Kamera",
+      "tr": "Kamera",
+      "ko": "카메라",
+      "ja": "カメラ"
     }
   }
 }

@@ -143,6 +143,7 @@ pub struct Settings {
     pub feature_clipboard: bool,
     pub feature_mail: bool,
     pub feature_convert: bool,
+    pub feature_camera: bool,
     /// Settings → Agents → Antigravity → Approve commands from the notch: a shell command
     /// none of Antigravity's rules covers waits for Allow / Deny on the island
     /// (agy_approvals.rs). Off by default; owned by the Rust side like `phone_link`, so
@@ -268,6 +269,7 @@ impl Default for Settings {
             feature_clipboard: true,
             feature_mail: true,
             feature_convert: true,
+            feature_camera: true,
             agy_approvals_enabled: false,
             mochi_tune: MochiTune::default(),
         }
@@ -591,6 +593,7 @@ mod tests {
   "featureClipboard": false,
   "featureMail": false,
   "featureConvert": false,
+  "featureCamera": false,
   "agyApprovalsEnabled": true,
   "mochiTune": {
     "eyeScale": 1.15,
@@ -1152,6 +1155,7 @@ mod tests {
                 "featureClipboard",
                 "featureMail",
                 "featureConvert",
+                "featureCamera",
                 "agyApprovalsEnabled",
                 "mochiTune",
             ]

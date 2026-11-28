@@ -347,7 +347,16 @@ export function buildAiradoroView(actions: ViewActions): ViewHost {
     metaBadge,
   );
 
-  const taskPill = h("div", { class: "airadoro-task-pill" });
+  const taskPill = h("button", {
+    type: "button",
+    class: "airadoro-task-pill",
+    title: tl("Agenda"),
+    onclick: () => {
+      if (!Airadoro.taskId) return;
+      actions.blip();
+      actions.setView("agenda");
+    },
+  });
   const controlsEl = h("div", { class: "airadoro-view-controls" });
   const sidePanel = h("div", { class: "airadoro-side" }, sideHead, taskPill, controlsEl);
 
@@ -434,8 +443,10 @@ export function buildAiradoroView(actions: ViewActions): ViewHost {
     const taskLabel = snap.phase !== "idle" && Airadoro.taskTitle ? `🎯 ${Airadoro.taskTitle}` : null;
     if (taskLabel) {
       taskPill.textContent = taskLabel;
+      taskPill.classList.toggle("clickable", Boolean(Airadoro.taskId));
       taskPill.style.display = "";
     } else {
+      taskPill.classList.remove("clickable");
       taskPill.style.display = "none";
     }
 

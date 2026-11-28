@@ -31,7 +31,8 @@ export type IslandViewName =
   | "clipboard"
   | "music"
   | "airadoro"
-  | "convert";
+  | "convert"
+  | "camera";
 
 export type BotStateName =
   | "idle"
@@ -120,6 +121,8 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   airadoro: { height: 280, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
   // Local file converter (FFmpeg, LibreOffice headless, Pandoc).
   convert: { height: 296, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
+  // Quick Camera Mirror (live preview, photo capture, video recording).
+  camera: { height: 318, botX: 320, botY: 19, botDiameter: 22, agentMode: "none" },
 };
 
 // The upload views above are only the fallback geometry. Once a file is actually
